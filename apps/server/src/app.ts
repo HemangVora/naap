@@ -18,7 +18,14 @@ const MAX_QUEUED_CARS = Number(process.env.MAX_QUEUED_CARS ?? 12);
 import type { Wiring } from './wiring.js';
 
 export async function buildApp(w: Wiring, store = new Store()) {
-  const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' }, trustProxy: true });
+  const app = Fastify({
+    logger: {
+      level: process.env.LOG_LEVEL ?? 'info',
+      // /join?owner=<token> is a page URL; strip every query string from logs.
+      serializers: { req: (r: { method: string; url: string }) => ({ method: r.method, url: r.url.split('?')[0] }) },
+    },
+    trustProxy: true,
+  });
   const bus = new Bus();
   const cooldown = new Cooldown(RUN_COOLDOWN_PER_PHONE_SEC);
   const queue = new RunQueue(MAX_CONCURRENT_RUNS, (waiting) => bus.emit({ t: 'queue', waiting }));
