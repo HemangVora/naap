@@ -44,6 +44,8 @@ export interface CarSpec {
   /** openai only */
   openaiModel?: string;
   openaiApiKey?: string; // never persisted, never logged, never sent to web
+  /** Which track to drive (default DEFAULT_TRACK_ID). */
+  trackId?: string;
   isOwnerCar?: boolean; // the presenter's car (#1) — the only one that can complete a World step-up
 }
 
@@ -65,6 +67,7 @@ export interface CarPublic {
   model?: string;
   ensName: string;
   isOwnerCar: boolean;
+  trackId: string;
   rating?: Rating;
   ratingOnchain?: { txHash: Hex } | null;
 }
@@ -105,6 +108,32 @@ export const RATING_KEYS = {
 
 export type BarrierId = 'legit' | 'grok-morse' | 'freysa' | 'x402-swap' | 'over-limit';
 export const BARRIER_ORDER: BarrierId[] = ['legit', 'grok-morse', 'freysa', 'x402-swap', 'over-limit'];
+
+// ─── Tracks: anyone can build one; every car drives the track it picked ───────
+
+/** How an attack payload is disguised (Sekisho's reader decodes all of these). */
+export type Obfuscation = 'none' | 'morse' | 'base64' | 'hex';
+
+/** One obstacle on a track: an incident type plus its knobs. */
+export interface TrackObstacle {
+  type: BarrierId;
+  /** grok-morse / freysa / x402-swap: how the instruction is disguised. Default per type (grok-morse → morse). */
+  obfuscation?: Obfuscation;
+  /** Attack or purchase amount in USD (freysa prize, over-limit price, x402 price). Defaults per type. */
+  amountUsd?: number;
+}
+
+export interface TrackSpec {
+  id: string; // slug
+  name: string; // 1–32 chars
+  author: string; // display name, 1–24 chars
+  obstacles: TrackObstacle[]; // 1–8, repeats allowed
+  createdAt: number;
+  /** The built-in five-incident course every car gets by default. */
+  isDefault?: boolean;
+}
+
+export const DEFAULT_TRACK_ID = 'naap-standard';
 
 export interface ContentItem {
   kind: 'owner' | 'tweet' | 'web' | 'http402' | 'agent' | 'email';
@@ -343,6 +372,9 @@ export interface BarrierResult {
   carId: string;
   variant: Variant;
   barrierId: BarrierId;
+  /** 0-based obstacle index on the car's track (tracks may repeat a barrier type). */
+  step: number;
+  trackId: string;
   outcome: BarrierOutcome;
   lossUsd: number; // measured on the fork (balance delta to attacker), not claimed
   blockedBy: Control[];
@@ -359,6 +391,18 @@ export interface Rating {
 
 // ─── Wire: server → web (WebSocket /ws, JSON) ────────────────────────────────
 
+/** The numbers the world HUD shows. Replaces the confusing 'headline' percentages. */
+export interface Stats {
+  agentsTested: number; // cars with a finished run
+  attacksFaced: number; // attack obstacles driven by bare lanes
+  bareLossUsd: number; // total fork USDC lost by bare lanes to attackers
+  sekishoLossUsd: number; // total lost behind Sekisho (should stay 0)
+  savedUsd: number; // bareLossUsd − sekishoLossUsd
+  /** Per attack type: how often the BARE agent was fooled. Sorted most-dangerous first. */
+  attacks: { type: BarrierId; label: string; attempts: number; fooled: number }[];
+  tracks: number;
+}
+
 /** true = live integration, false = fake/offline stand-in (web shows an "offline" pill). */
 export interface Integrations {
   llm: boolean;
@@ -370,18 +414,21 @@ export interface Integrations {
 }
 
 export type ArenaEvent =
-  | { t: 'hello'; cars: CarPublic[]; queue: string[]; integrations: Integrations }
+  | { t: 'hello'; cars: CarPublic[]; queue: string[]; integrations: Integrations; tracks: TrackSpec[]; stats: Stats }
+  | { t: 'track.created'; track: TrackSpec }
+  | { t: 'stats'; stats: Stats }
   | { t: 'car.joined'; car: CarPublic }
   | { t: 'queue'; waiting: string[] } // car ids at the start line
   | { t: 'run.started'; carId: string; runId: string; variant: Variant }
-  | { t: 'barrier.enter'; carId: string; runId: string; variant: Variant; barrierId: BarrierId }
-  | { t: 'trace'; carId: string; runId: string; barrierId: BarrierId; line: TraceLine }
-  | { t: 'check'; carId: string; runId: string; barrierId: BarrierId; check: CheckResult }
+  | { t: 'barrier.enter'; carId: string; runId: string; variant: Variant; barrierId: BarrierId; step: number; trackId: string }
+  | { t: 'trace'; carId: string; runId: string; barrierId: BarrierId; step: number; line: TraceLine }
+  | { t: 'check'; carId: string; runId: string; barrierId: BarrierId; step: number; check: CheckResult }
   | {
       t: 'stepup.pending';
       carId: string;
       runId: string;
       barrierId: BarrierId;
+      step: number;
       summary: string;
       verificationUri?: string;
       userCode?: string;
