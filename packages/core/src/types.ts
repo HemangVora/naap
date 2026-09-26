@@ -356,8 +356,18 @@ export interface Rating {
 
 // ─── Wire: server → web (WebSocket /ws, JSON) ────────────────────────────────
 
+/** true = live integration, false = fake/offline stand-in (web shows an "offline" pill). */
+export interface Integrations {
+  llm: boolean;
+  jev: boolean;
+  intercepta: boolean;
+  world: boolean;
+  ens: boolean;
+  fork: boolean;
+}
+
 export type ArenaEvent =
-  | { t: 'hello'; cars: CarPublic[]; queue: string[] }
+  | { t: 'hello'; cars: CarPublic[]; queue: string[]; integrations: Integrations }
   | { t: 'car.joined'; car: CarPublic }
   | { t: 'queue'; waiting: string[] } // car ids at the start line
   | { t: 'run.started'; carId: string; runId: string; variant: Variant }

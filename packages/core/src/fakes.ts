@@ -88,7 +88,7 @@ export class FakeStepUp implements StepUp {
           r(
             approve
               ? { status: 'APPROVED', subject: 'fake-world-sub', authTime: Math.floor(Date.now() / 1000), detail: 'fake approval' }
-              : { status: 'EXPIRED', detail: `no owner approval within ${req.ttlSec}s` },
+              : { status: 'EXPIRED', detail: `No owner step-up within ${req.ttlSec} s — payment refused` },
           ),
         this.expireMs,
       ),
