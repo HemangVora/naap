@@ -16,7 +16,7 @@ import type { EnsMandateSource } from '@crumple/ens';
 import type { DraftLlm } from './incidents.js';
 import type { IncidentsEns, Wiring } from './wiring.js';
 
-/** The incident drafter: Claude Haiku, one plain-text turn, 20 s. Same client construction as report.ts. */
+/** The incident + Deploy Guard contract drafter: Claude Haiku, one plain-text turn, 20 s. Same client construction as report.ts. */
 const DRAFT_MODEL = 'claude-haiku-4-5-20251001';
 const DRAFT_TIMEOUT_MS = 20_000;
 
@@ -27,7 +27,7 @@ function draftLlmFromEnv(): DraftLlm | undefined {
   const model = cfg.model(DRAFT_MODEL);
   return async (system, user) => {
     const res = await client.messages.create(
-      { model, max_tokens: 900, system, messages: [{ role: 'user', content: user }] },
+      { model, max_tokens: 1600, system, messages: [{ role: 'user', content: user }] },
       { timeout: DRAFT_TIMEOUT_MS, maxRetries: 0 },
     );
     return res.content.map((c) => (c.type === 'text' ? c.text : '')).join('');
@@ -105,6 +105,7 @@ export async function createWiring(): Promise<Wiring> {
     runCar: (car, spec, deps, track) => runCar(car, spec, deps, addrs, track),
     incidentsEns: incidentsEnsFrom(mandates, ownerAddress),
     draftLlm: draftLlmFromEnv(),
+    guardRpcUrl: fork?.rpcUrl,
     async mountX402(app) {
       // A real x402 resource so connected agents can hit the same seller the course simulates.
       // /x402/weather/report is the pre-rename path, kept as an alias so older agents still get the same 402.

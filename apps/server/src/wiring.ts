@@ -19,5 +19,7 @@ export interface Wiring {
   incidentsEns?: IncidentsEns;
   /** AI drafter for POST /api/incidents/draft; absent = template drafts. */
   draftLlm?: DraftLlm;
+  /** Fork RPC for Deploy Guard's deploy + proof-of-vulnerability; absent = static-only audits. */
+  guardRpcUrl?: string;
   close?(): Promise<void>;
 }

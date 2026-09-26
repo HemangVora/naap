@@ -16,12 +16,16 @@ import { computeStats } from './stats.js';
 import { McpRegistry, mountMcp, type Admitted, type AdmitMeta } from './mcp.js';
 import { buildReport, reportLlmFromEnv, type ReportLlm } from './report.js';
 import { draftIncident, incidentHash, incidentId, validateIncident } from './incidents.js';
+import { createGuardEngine, GUARD_PRESETS, type GuardReport } from '@crumple/guard';
+import { draftContract, GUARD_LIMITS } from './guard.js';
 
 /** Global bound on waiting cars (each run costs LLM credit). */
 const MAX_QUEUED_CARS = Number(process.env.MAX_QUEUED_CARS ?? 12);
 /** One new track per client per this many seconds; and a global ceiling on the registry. */
 const TRACK_COOLDOWN_SEC = Number(process.env.TRACK_COOLDOWN_SEC ?? 30);
 const MAX_TRACKS = Number(process.env.MAX_TRACKS ?? 500);
+/** Upper bound on one Deploy Guard audit (compile + fork deploy + probes) before it degrades to the static scan. */
+const GUARD_AUDIT_TIMEOUT_MS = 60_000;
 /** How many tracks `hello` carries. */
 const HELLO_TRACKS = 100;
 import type { Wiring } from './wiring.js';
@@ -59,6 +63,15 @@ export async function buildApp(w: Wiring, store?: CarStore, opts: AppOptions = {
   const publishWindow: number[] = [];
   const draftCooldown = new Cooldown(8);
   const draftWindow: number[] = [];
+  /** Deploy Guard: fork deploy + probes when the fork is up, static scan otherwise. Draft and audit each: one per 8 s per client, ≤ 20 a minute across everyone. */
+  const guard = createGuardEngine({ rpcUrl: w.guardRpcUrl });
+  const staticGuard = w.guardRpcUrl ? createGuardEngine({}) : guard;
+  const guardDraftCooldown = new Cooldown(8);
+  const guardDraftWindow: number[] = [];
+  const guardAuditCooldown = new Cooldown(8);
+  const guardAuditWindow: number[] = [];
+  /** Audits share one fork, so they run one at a time (snapshot/revert of one must not interleave with another's deploy). */
+  let guardChain: Promise<unknown> = Promise.resolve();
   /**
    * Publishes `inc-<id>.naap.eth` in the background under a per-process budget (≤ 1 registration per 60 s, ≤ 40 total):
    * each registration is a relayer transaction. Never blocks or fails the publish; over budget or ENS off → off-chain.
@@ -281,6 +294,52 @@ export async function buildApp(w: Wiring, store?: CarStore, opts: AppOptions = {
   app.get<{ Params: { id: string } }>('/api/incidents/:id', async (req, reply) => {
     const incident = db.getIncident(req.params.id);
     return incident ? { incident } : reply.code(404).send({ error: 'no such incident' });
+  });
+
+  // ─── deploy guard ──────────────────────────────────────────────────────────
+  /** Per-client 8 s cooldown + global 20/min window; returns the 429 message, or null and consumes a slot. */
+  const guardSlot = (cd: Cooldown, win: number[], key: string, what: string): string | null => {
+    const wait = cd.check(key);
+    if (wait) return `One ${what} per 8s — try again in ${wait}s`;
+    const now = Date.now();
+    while (win.length && now - win[0]! > 60_000) win.shift();
+    if (win.length >= 20) return `Lots of people are using the guard — try again in a minute`;
+    cd.mark(key);
+    win.push(now);
+    return null;
+  };
+  app.get('/api/guard/presets', async () => ({ presets: GUARD_PRESETS }));
+  app.post('/api/guard/draft', async (req, reply) => {
+    const prompt = String(((req.body ?? {}) as { prompt?: unknown }).prompt ?? '').trim();
+    if (!prompt) return reply.code(400).send({ error: 'Describe the contract first.' });
+    if (prompt.length > GUARD_LIMITS.promptMax) return reply.code(400).send({ error: `Keep the request under ${GUARD_LIMITS.promptMax} characters.` });
+    const busy = guardSlot(guardDraftCooldown, guardDraftWindow, `${req.ip}|${String(req.headers['x-phone-id'] ?? '').slice(0, 64)}`, 'draft');
+    if (busy) return reply.code(429).send({ error: busy });
+    return draftContract(prompt, w.draftLlm);
+  });
+  app.post('/api/guard/audit', async (req, reply) => {
+    const raw = ((req.body ?? {}) as { source?: unknown }).source;
+    const source = typeof raw === 'string' ? raw : '';
+    if (!source.trim()) return reply.code(400).send({ error: 'Paste or draft a contract first.' });
+    if (Buffer.byteLength(source, 'utf8') > GUARD_LIMITS.sourceMaxBytes) return reply.code(400).send({ error: 'Contract source must be 12 KB or less.' });
+    const busy = guardSlot(guardAuditCooldown, guardAuditWindow, `${req.ip}|${String(req.headers['x-phone-id'] ?? '').slice(0, 64)}`, 'audit');
+    if (busy) return reply.code(429).send({ error: busy });
+    const run = guardChain.then(async (): Promise<GuardReport> => {
+      let timer: NodeJS.Timeout | undefined;
+      try {
+        // Capped so a hung fork cannot wedge the chain for everyone behind it.
+        const timeout = new Promise<never>((_, rej) => { timer = setTimeout(() => rej(new Error('audit timed out')), GUARD_AUDIT_TIMEOUT_MS); });
+        return await Promise.race([guard.audit(source), timeout]);
+      } catch (e) {
+        // Bad Solidity comes back as a COMPILE_ERROR report; a throw here is the fork misbehaving, so degrade to static.
+        app.log.warn({ err: String(e) }, 'guard audit failed on the fork; static-only report');
+        return staticGuard.audit(source);
+      } finally {
+        clearTimeout(timer);
+      }
+    });
+    guardChain = run.catch(() => {});
+    return { report: await run };
   });
 
   app.get<{ Params: { id: string } }>('/api/cars/:id', async (req, reply) => {
