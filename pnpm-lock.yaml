@@ -23,6 +23,9 @@ importers:
 
   apps/server:
     dependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^0.128.0
+        version: 0.128.0(zod@4.6.5)
       '@crumple/chain':
         specifier: workspace:*
         version: link:../../packages/chain

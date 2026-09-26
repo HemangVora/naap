@@ -1,5 +1,7 @@
 import QRCode from 'qrcode';
-import type { BarrierResult, Variant } from '../types';
+import './report.css';
+import type { RunReport } from '@crumple/core';
+import type { BarrierResult, CarPublic, Variant } from '../types';
 import { BARRIERS, BARRIER_SHORT, CONTROL_TONE, ETHERSCAN_TX, fmtUsd } from '../types';
 import { Store, type CarState } from '../store';
 import { connectFeed, isMock } from '../feed';
@@ -17,14 +19,33 @@ export function mountCar(root: HTMLElement, carId: string) {
 
   let qrFor = '';
   let qrCanvas: HTMLCanvasElement | null = null;
+  /** The assessment sheet (GET /api/cars/:id/report), polled once the rating is in. */
+  let report: RunReport | null = null;
+  let carInfo: CarPublic | null = null;
+  let shareMsg = '';
 
   const render = () => {
     const s = store.state;
     let c = s.cars.get(carId);
     if (!c && mock) c = store.carsByOrder()[0]; // `/car/anything?mock=1` follows the first scripted car
     page.innerHTML = '';
-    page.append(el('header', {}, brandHeader('live car status')));
+    page.append(el('header', {}, brandHeader(report ? 'assessment report' : 'live car status')));
 
+    if (report) {
+      const tx = c?.onchain?.txHash ?? carInfo?.ratingOnchain?.txHash;
+      page.append(reportSheet(report, tx, shareMsg, async () => {
+        shareMsg = await share(report!);
+        schedule();
+        window.setTimeout(() => ((shareMsg = ''), schedule()), 2500);
+      }));
+    } else if (c?.rating) {
+      page.append(el('div', { class: 'rp-pending', text: 'Run complete. The assessor is writing your report…' }));
+    }
+
+    if (!c && report) {
+      page.append(el('a', { class: 'back', href: '/join', text: '← send another car' }));
+      return;
+    }
     if (!c) {
       page.append(
         el('h2', { text: s.connected ? 'Waiting for your car' : 'Connecting…' }),
@@ -59,6 +80,11 @@ export function mountCar(root: HTMLElement, carId: string) {
         card.append(el('div', { class: 'left', text: `${Math.max(0, Math.round((su.expiresAt * 1000 - Date.now()) / 1000))}s left` }));
       }
       page.append(card);
+    }
+
+    if (report) {
+      page.append(el('a', { class: 'back', href: '/join', text: '← send another car' }));
+      return; // the sheet above carries stars, per-step results, ENS and the rating tx
     }
 
     // bare × airbag × 5 barriers
@@ -97,6 +123,31 @@ export function mountCar(root: HTMLElement, carId: string) {
     });
   };
   store.subscribe(schedule);
+
+  // Report: fetch on load; once the rating is in, poll until the sheet exists (it follows within ~8 s).
+  const loadReport = async () => {
+    if (report || mock) return;
+    try {
+      const r = await fetch(`/api/cars/${encodeURIComponent(carId)}/report`);
+      if (r.ok) {
+        report = ((await r.json()) as { report: RunReport }).report;
+        const info = await fetch(`/api/cars/${encodeURIComponent(carId)}`).catch(() => null);
+        if (info?.ok) carInfo = ((await info.json()) as { car: CarPublic }).car;
+        schedule();
+      }
+    } catch {
+      /* offline: try again on the next tick */
+    }
+  };
+  void loadReport();
+  let polls = 0;
+  window.setInterval(() => {
+    if (report || mock || polls > 60) return;
+    if (store.state.cars.get(carId)?.rating) {
+      polls++;
+      void loadReport();
+    }
+  }, 2000);
   window.setInterval(() => {
     const c = store.state.cars.get(carId);
     if (c?.stepUp && !c.stepUp.result) schedule();
@@ -141,4 +192,85 @@ function cell(c: CarState, v: Variant, b: (typeof BARRIERS)[number]) {
     node.append(chips);
   }
   return node;
+}
+
+// ─── assessment sheet ────────────────────────────────────────────────────────
+
+const OUTCOME_LABEL: Record<string, string> = { CRASH: 'CRASH', SAFE: 'SAFE', PAID: 'PAID', FALSE_BLOCK: 'FALSE BLOCK' };
+
+function modelName(id?: string) {
+  if (!id) return '';
+  if (/haiku-4[.-]5/.test(id)) return 'Claude Haiku 4.5';
+  if (/sonnet-5/.test(id)) return 'Claude Sonnet 5';
+  return id.replace(/^anthropic\//, '');
+}
+
+async function share(r: RunReport): Promise<string> {
+  const url = `${location.origin}/car/${encodeURIComponent(r.carId)}`;
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: `${r.carName} — NaAP assessment`, text: r.headline, url });
+      return 'Shared';
+    }
+    await navigator.clipboard.writeText(url);
+    return 'Link copied';
+  } catch {
+    return 'Copy failed — long-press the address bar';
+  }
+}
+
+function reportSheet(r: RunReport, txHash: string | undefined, shareMsg: string, onShare: () => void) {
+  const rt = r.rating;
+  const body = el('div', { class: 'rp-body' });
+  body.append(
+    el('div', { class: 'rp-kicker' }, el('span', { html: `<b>NaAP</b> assessment · ${esc(r.carName)}` }), el('span', { text: r.trackName })),
+    el('div', { class: 'rp-stars', role: 'img', 'aria-label': `Bare ${rt.bare.stars} of 5 stars, with Sekisho ${rt.airbag.stars} of 5 stars` },
+      el('div', { class: 'rp-lane bare' }, el('span', { class: 'l', text: 'BARE' }), el('span', { class: 's', text: starsText(rt.bare.stars) }),
+        el('span', { class: 'm', text: `${rt.bare.crashes} crash${rt.bare.crashes === 1 ? '' : 'es'}` })),
+      el('span', { class: 'arrow', text: '→' }),
+      el('div', { class: 'rp-lane air' }, el('span', { class: 'l', text: 'WITH SEKISHO' }), el('span', { class: 's', text: starsText(rt.airbag.stars) }),
+        el('span', { class: 'm', text: `${rt.airbag.crashes} crash${rt.airbag.crashes === 1 ? '' : 'es'}` })),
+    ),
+    el('h2', { class: 'rp-headline', text: r.headline }),
+    el('div', { class: 'rp-by' },
+      r.aiWritten ? el('span', { class: 'ai', text: 'AI ASSESSOR' }) : el('span', { class: 'auto', text: 'ASSESSOR’S NOTE' }),
+      el('span', { text: r.aiWritten ? modelName(r.assessorModel) || 'Claude' : 'written from the results' }),
+    ),
+    el('p', { class: 'rp-summary', text: r.summary }),
+  );
+  const points = el('ul', { class: 'rp-points' });
+  for (const t of r.strengths) points.append(el('li', { class: 'good' }, el('span', { class: 'k', text: '✓', 'aria-label': 'strength' }), el('span', { text: t })));
+  for (const t of r.weaknesses) points.append(el('li', { class: 'bad' }, el('span', { class: 'k', text: '✗', 'aria-label': 'weakness' }), el('span', { text: t })));
+  body.append(points);
+  body.append(el('div', { class: 'rp-rec' }, el('div', { class: 'l', text: 'FIX THIS FIRST' }), el('p', { text: r.recommendation })));
+
+  const steps = el('div', { class: 'rp-steps' });
+  steps.append(el('div', { class: 'h', text: 'OBSTACLE' }), el('div', { class: 'h bare', text: 'BARE' }), el('div', { class: 'h air', text: 'SEKISHO 関' }));
+  for (const s of r.steps) {
+    steps.append(el('div', { class: 'ob' }, el('small', { text: `${s.step + 1}/${r.steps.length}` }), BARRIER_SHORT[s.type] ?? s.type));
+    const bareLabel = s.bare.outcome === 'CRASH' && s.bare.lossUsd > 0 ? `CRASH −${fmtUsd(s.bare.lossUsd)}` : OUTCOME_LABEL[s.bare.outcome];
+    steps.append(el('div', { class: s.bare.outcome }, el('div', { class: 'o', text: bareLabel }), el('div', { class: 'w', text: s.bare.what })));
+    const air = el('div', { class: s.sekisho.outcome }, el('div', { class: 'o', text: OUTCOME_LABEL[s.sekisho.outcome] }));
+    if (s.sekisho.blockedBy.length) {
+      const chips = el('div', { class: 'mini-chips' });
+      for (const ctl of s.sekisho.blockedBy.slice(0, 2)) chips.append(el('span', { class: CONTROL_TONE[ctl], text: ctl }));
+      air.append(chips);
+    } else air.append(el('div', { class: 'w', text: s.sekisho.reason }));
+    steps.append(air);
+  }
+  body.append(steps);
+
+  body.append(el('div', { class: 'rp-totals' },
+    el('div', { class: 'bare' }, el('div', { class: 'l', text: 'Lost bare' }), el('div', { class: 'v', text: fmtUsd(r.bareLossUsd) })),
+    el('div', { class: 'air' }, el('div', { class: 'l', text: 'With Sekisho' }), el('div', { class: 'v', text: fmtUsd(r.sekishoLossUsd) })),
+    el('div', { class: 'saved' }, el('div', { class: 'l', text: 'Saved' }), el('div', { class: 'v', text: fmtUsd(r.savedUsd) })),
+  ));
+
+  const ens = el('div', { class: 'ens' }, el('span', { class: 'n', text: r.ensName }));
+  if (txHash) ens.append(el('a', { href: `${ETHERSCAN_TX}${encodeURIComponent(txHash)}`, target: '_blank', rel: 'noopener', text: '✓ rating written on ENS (Sepolia)' }));
+  else ens.append(el('span', { class: 'st', text: 'Rating being written to ENS text records…' }));
+  const btn = el('button', { class: 'rp-share', type: 'button', text: shareMsg || 'SHARE' });
+  btn.addEventListener('click', onShare);
+  body.append(el('div', { class: 'rp-foot' }, ens, btn));
+  return el('section', { class: 'report', 'aria-label': 'Assessment report' }, body);
 }

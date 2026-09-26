@@ -1,6 +1,6 @@
 // Store contract + the Car → CarPublic projection. Kept free of node:sqlite so app.ts (and in-process tests)
 // can use an in-memory store without loading the SQLite module.
-import type { BarrierResult, Car, CarPublic, Hex, Rating, TrackSpec } from '@crumple/core';
+import type { BarrierResult, Car, CarPublic, Hex, Rating, RunReport, TrackSpec } from '@crumple/core';
 import { DEFAULT_TRACK, DEFAULT_TRACK_ID } from '@crumple/core';
 
 export interface CarStore {
@@ -21,6 +21,9 @@ export interface CarStore {
   /** Default track first, then newest first. */
   tracks(limit?: number): TrackSpec[];
   trackCount(): number;
+  /** End-of-run assessment (lane report). One per car. */
+  putReport(r: RunReport): void;
+  getReport(carId: string): RunReport | undefined;
 }
 
 export function toPublic(car: Car, rating?: Rating, ratingTx?: Hex | null): CarPublic {
@@ -95,5 +98,12 @@ export class MemoryStore implements CarStore {
   }
   trackCount() {
     return this.trackMap.size;
+  }
+  private reportMap = new Map<string, RunReport>();
+  putReport(r: RunReport) {
+    this.reportMap.set(r.carId, r);
+  }
+  getReport(carId: string) {
+    return this.reportMap.get(carId);
   }
 }

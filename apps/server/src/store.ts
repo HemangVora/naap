@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import type { DatabaseSync as DatabaseSyncT } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { BarrierResult, Car, CarPublic, Hex, Rating, TrackSpec } from '@crumple/core';
+import type { BarrierResult, Car, CarPublic, Hex, Rating, RunReport, TrackSpec } from '@crumple/core';
 import { BARRIER_ORDER, DEFAULT_TRACK, DEFAULT_TRACK_ID } from '@crumple/core';
 import { sortTracks, toPublic, type CarStore } from './public.js';
 
@@ -23,6 +23,9 @@ export class Store implements CarStore {
       );
       create table if not exists tracks (
         id text primary key, track text not null, is_default integer not null default 0, created_at integer not null
+      );
+      create table if not exists reports (
+        car_id text primary key, report text not null, created_at integer not null
       );
     `);
     this.migrateResults();
@@ -111,5 +114,12 @@ export class Store implements CarStore {
   }
   trackCount(): number {
     return (this.db.prepare('select count(*) as n from tracks').get() as { n: number }).n;
+  }
+  putReport(r: RunReport) {
+    this.db.prepare('insert or replace into reports (car_id, report, created_at) values (?, ?, ?)').run(r.carId, JSON.stringify(r), r.createdAt);
+  }
+  getReport(carId: string): RunReport | undefined {
+    const row = this.db.prepare('select report from reports where car_id = ?').get(carId) as { report: string } | undefined;
+    return row ? (JSON.parse(row.report) as RunReport) : undefined;
   }
 }

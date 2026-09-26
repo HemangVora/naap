@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import {
-  DEFAULT_TRACK, DEFAULT_TRACK_ID, MAX_CONCURRENT_RUNS, RUN_COOLDOWN_PER_PHONE_SEC,
+  DEFAULT_TRACK, DEFAULT_TRACK_ID, MAX_CONCURRENT_RUNS, PARENT_ENS, RUN_COOLDOWN_PER_PHONE_SEC,
   type ArenaEvent, type Car, type CarSpec, type Rating, type Stats, type TrackSpec,
 } from '@crumple/core';
 import { toPublic, type CarStore } from './public.js';
@@ -14,6 +14,7 @@ import { Cooldown, RunQueue } from './queue.js';
 import { carId, randomSuffix, trackSlug, validateSpec, validateTrack, type SpecInput, type TrackInput } from './validate.js';
 import { computeStats } from './stats.js';
 import { McpRegistry, mountMcp, type Admitted, type AdmitMeta } from './mcp.js';
+import { buildReport, reportLlmFromEnv, type ReportLlm } from './report.js';
 
 /** Global bound on waiting cars (each run costs LLM credit). */
 const MAX_QUEUED_CARS = Number(process.env.MAX_QUEUED_CARS ?? 12);
@@ -24,9 +25,15 @@ const MAX_TRACKS = Number(process.env.MAX_TRACKS ?? 500);
 const HELLO_TRACKS = 100;
 import type { Wiring } from './wiring.js';
 
+export interface AppOptions {
+  /** Writes the end-of-run report prose. Default: Claude Haiku from env (none under vitest); null = deterministic text. */
+  reportLlm?: ReportLlm | null;
+}
+
 /** `store` defaults to the SQLite Store (loaded lazily so node:sqlite is only touched when needed). */
-export async function buildApp(w: Wiring, store?: CarStore) {
+export async function buildApp(w: Wiring, store?: CarStore, opts: AppOptions = {}) {
   const db: CarStore = store ?? new (await import('./store.js')).Store();
+  const reportLlm = opts.reportLlm !== undefined ? opts.reportLlm : process.env.VITEST ? null : reportLlmFromEnv();
   const app = Fastify({
     logger: {
       level: process.env.LOG_LEVEL ?? 'info',
@@ -73,16 +80,34 @@ export async function buildApp(w: Wiring, store?: CarStore) {
     driverFor: (car: Car, spec: CarSpec) => (spec.kind === 'mcp' ? mcp.driverFor(car.id) : w.deps.driverFor(car, spec)),
   };
 
+  /** After `rating`: assessment sheet → reports table → `report` event. Never throws; runs off the queue slot. */
+  async function produceReport(car: Car, track: TrackSpec, rating: Rating): Promise<void> {
+    try {
+      const report = await buildReport(car, track, db.results(car.id), rating, reportLlm, { log: (l) => app.log.warn(l) });
+      db.putReport(report);
+      bus.emit({ t: 'report', carId: car.id, report });
+    } catch (e) {
+      app.log.error(`report ${car.id}: ${(e as Error).message}`);
+    }
+  }
+
   async function startRun(car: Car, spec: CarSpec) {
     const track = db.getTrack(spec.trackId ?? DEFAULT_TRACK_ID) ?? DEFAULT_TRACK;
     queue.add(car.id, async () => {
       let rating: Rating | null = null;
+      let report: Promise<void> | null = null;
       try {
         rating = await w.runCar(car, spec, deps, track);
         db.setRating(car.id, rating);
+        report = produceReport(car, track, rating); // not awaited: the queue slot frees now
       } finally {
         secrets.delete(car.id);
-        if (spec.kind === 'mcp') mcp.finish(car.id, rating);
+        // MCP agents get "finished" once the report exists (≤ ~8 s later), so it can carry the verdict.
+        if (spec.kind === 'mcp') {
+          const r = rating;
+          if (report) void report.then(() => mcp.finish(car.id, r));
+          else mcp.finish(car.id, r);
+        }
       }
     });
   }
@@ -112,7 +137,7 @@ export async function buildApp(w: Wiring, store?: CarStore) {
     const car: Car = {
       id,
       spec: publicSpec,
-      ensName: `${id}.crumple.eth`,
+      ensName: `${id}.${PARENT_ENS}`,
       wallet: w.deps.signer.walletFor(id, 'airbag'),
       createdAt: Date.now(),
       sessionToken: randomBytes(12).toString('hex'),
@@ -179,6 +204,11 @@ export async function buildApp(w: Wiring, store?: CarStore) {
     if (!car) return reply.code(404).send({ error: 'no such car' });
     return { car, results: db.results(req.params.id) };
   });
+  app.get<{ Params: { id: string } }>('/api/cars/:id/report', async (req, reply) => {
+    const report = db.getReport(req.params.id);
+    if (!report) return reply.code(404).send({ error: db.getCar(req.params.id) ? 'report not ready' : 'no such car' });
+    return { report };
+  });
 
   await mountMcp(app, {
     admit,
@@ -186,6 +216,7 @@ export async function buildApp(w: Wiring, store?: CarStore) {
     carRating: (id) => db.publicCar(id)?.rating,
     carTrack: (id) => db.getTrack(db.getCar(id)?.spec.trackId ?? DEFAULT_TRACK_ID) ?? DEFAULT_TRACK,
     carResults: (id) => db.results(id),
+    carReport: (id) => db.getReport(id),
     log: (line) => app.log.info(`[mcp] ${line}`),
   });
 

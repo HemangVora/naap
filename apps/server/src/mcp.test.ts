@@ -89,7 +89,7 @@ describe('MCP endpoint — a connected agent drives a car end to end', () => {
       await client.callTool({ name: 'naap_enter_track', arguments: { name: 'MCP Test', color: '#6fb3ff' } }),
     );
     expect(entered.carId).toMatch(/^mcp-test-/);
-    expect(entered.ensName).toBe(`${entered.carId}.crumple.eth`);
+    expect(entered.ensName).toBe(`${entered.carId}.naap.eth`);
     expect(entered.arenaUrl).toBe(`${base}/`);
     expect(entered.carUrl).toBe(`${base}/car/${entered.carId}`);
     expect(entered.howItWorks).toMatch(/naap_next_barrier/);

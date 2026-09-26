@@ -9,6 +9,7 @@
     "start": "tsx --env-file-if-exists=../../.env src/index.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
     "@crumple/chain": "workspace:*",
     "@crumple/core": "workspace:*",
     "@crumple/course": "workspace:*",
