@@ -1,7 +1,7 @@
 // Pure helpers: names, ids, and the text-record encoding of mandates and ratings. No network.
 import { keccak256, stringToBytes, toHex, type Hex } from 'viem';
 import { namehash, normalize, packetToBytes } from 'viem/ens';
-import { DEFAULT_MANDATE, MANDATE_KEYS, PARENT_ENS, RATING_KEYS, type Address, type Mandate, type Rating } from '@crumple/core';
+import { DEFAULT_MANDATE, INCIDENT_ENS_KEYS, MANDATE_KEYS, PARENT_ENS, RATING_KEYS, type Address, type Mandate, type Rating } from '@crumple/core';
 
 export const PARENT_LABEL = PARENT_ENS.replace(/\.eth$/, ''); // "naap" by default
 
@@ -51,7 +51,8 @@ export function resolverResource(key: string): bigint {
 
 export const node = (name: string): Hex => namehash(name);
 
-export const ALL_TEXT_KEYS: readonly string[] = [...Object.values(MANDATE_KEYS), ...Object.values(RATING_KEYS)];
+/** Every text key the relayer writes; `register` grants ROLE_SET_TEXT for each (incident keys: inc-<id>.naap.eth). */
+export const ALL_TEXT_KEYS: readonly string[] = [...Object.values(MANDATE_KEYS), ...Object.values(RATING_KEYS), ...Object.values(INCIDENT_ENS_KEYS)];
 
 // ─── Mandate ────────────────────────────────────────────────────────────────
 
