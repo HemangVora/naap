@@ -92,6 +92,13 @@ export function revertReason(e: unknown): string {
 }
 
 export function createChain(opts: CreateChainOpts): ChainWithHelpers {
+  // DRB funding impersonates one holder; concurrent lanes would race its nonce ("replacement transaction underpriced").
+  let drbTail: Promise<unknown> = Promise.resolve();
+  const serialDrb = <T>(fn: () => Promise<T>): Promise<T> => {
+    const next = drbTail.then(fn, fn);
+    drbTail = next.catch(() => undefined);
+    return next;
+  };
   const log = opts.log ?? ((l: string) => console.log(l));
   const pk = (opts.facilitatorPk ?? (process.env.FACILITATOR_PK as Hex | undefined) ?? ANVIL_DEFAULT_PK) as Hex;
   const account = privateKeyToAccount(pk);
@@ -190,7 +197,7 @@ export function createChain(opts: CreateChainOpts): ChainWithHelpers {
         ensureEoa(wallet),
         setUsdcBalance(wallet, usdToUnits(usd)),
         anvil('anvil_setBalance', [wallet, numberToHex(gasWei)]),
-        drbUnits > 0n && DRB.enabled ? fundDrb(publicClient, wallet, drbUnits).catch((e) => log(`[chain] DRB funding skipped: ${(e as Error).message}`)) : undefined,
+        drbUnits > 0n && DRB.enabled ? serialDrb(() => fundDrb(publicClient, wallet, drbUnits)).catch((e) => log(`[chain] DRB funding skipped: ${(e as Error).message}`)) : undefined,
       ]);
     },
 
