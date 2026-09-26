@@ -214,13 +214,24 @@ export async function mountGuard(root: HTMLElement) {
     out.innerHTML =
       '<div class="gd-pending"><b>Sandbox run in progress</b><ol><li>compile with solc ^0.8.24</li><li>deploy to an isolated Base fork</li><li>attack it from a stranger’s wallet</li><li>revert the fork, leave no trace</li></ol></div>';
     syncMeta();
+    // Stage the steps so the run reads as it happens; the fork itself answers in about a second.
+    const steps = [...out.querySelectorAll<HTMLLIElement>('.gd-pending li')];
+    let stage = 0;
+    const tick = () => steps.forEach((li, i) => {
+      li.classList.toggle('done', i < stage);
+      li.classList.toggle('active', i === stage);
+    });
+    tick();
+    const ticker = window.setInterval(() => { stage = Math.min(stage + 1, steps.length - 1); tick(); }, 1000);
     try {
-      const { report } = await api.audit(src);
+      const [{ report }] = await Promise.all([api.audit(src), new Promise((r) => setTimeout(r, 4000))]);
+      window.clearInterval(ticker);
       lastReport = report;
       auditedSrc = src;
       renderReport(report);
       out.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (e) {
+      window.clearInterval(ticker);
       out.hidden = !lastReport;
       if (lastReport) renderReport(lastReport);
       else out.innerHTML = '';
