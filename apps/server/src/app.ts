@@ -64,14 +64,18 @@ export async function buildApp(w: Wiring, store?: CarStore, opts: AppOptions = {
   const draftCooldown = new Cooldown(8);
   const draftWindow: number[] = [];
   /** Deploy Guard: fork deploy + probes when the fork is up, static scan otherwise. Draft and audit each: one per 8 s per client, ≤ 20 a minute across everyone. */
-  const guard = createGuardEngine({ rpcUrl: w.guardRpcUrl });
-  const staticGuard = w.guardRpcUrl ? createGuardEngine({}) : guard;
+  // The guard's dedicated fork may come up after boot, so the fork engine is (re)built when w.guardRpcUrl appears.
+  let guardUrl = w.guardRpcUrl;
+  let guard = createGuardEngine({ rpcUrl: guardUrl });
+  const guardEngine = () => {
+    if (w.guardRpcUrl !== guardUrl) guard = createGuardEngine({ rpcUrl: (guardUrl = w.guardRpcUrl) });
+    return guard;
+  };
+  const staticGuard = createGuardEngine({});
   const guardDraftCooldown = new Cooldown(8);
   const guardDraftWindow: number[] = [];
   const guardAuditCooldown = new Cooldown(8);
   const guardAuditWindow: number[] = [];
-  /** Audits share one fork, so they run one at a time (snapshot/revert of one must not interleave with another's deploy). */
-  let guardChain: Promise<unknown> = Promise.resolve();
   /**
    * Publishes `inc-<id>.naap.eth` in the background under a per-process budget (≤ 1 registration per 60 s, ≤ 40 total):
    * each registration is a relayer transaction. Never blocks or fails the publish; over budget or ENS off → off-chain.
@@ -324,22 +328,18 @@ export async function buildApp(w: Wiring, store?: CarStore, opts: AppOptions = {
     if (Buffer.byteLength(source, 'utf8') > GUARD_LIMITS.sourceMaxBytes) return reply.code(400).send({ error: 'Contract source must be 12 KB or less.' });
     const busy = guardSlot(guardAuditCooldown, guardAuditWindow, `${req.ip}|${String(req.headers['x-phone-id'] ?? '').slice(0, 64)}`, 'audit');
     if (busy) return reply.code(429).send({ error: busy });
-    const run = guardChain.then(async (): Promise<GuardReport> => {
-      let timer: NodeJS.Timeout | undefined;
-      try {
-        // Capped so a hung fork cannot wedge the chain for everyone behind it.
-        const timeout = new Promise<never>((_, rej) => { timer = setTimeout(() => rej(new Error('audit timed out')), GUARD_AUDIT_TIMEOUT_MS); });
-        return await Promise.race([guard.audit(source), timeout]);
-      } catch (e) {
-        // Bad Solidity comes back as a COMPILE_ERROR report; a throw here is the fork misbehaving, so degrade to static.
-        app.log.warn({ err: String(e) }, 'guard audit failed on the fork; static-only report');
-        return staticGuard.audit(source);
-      } finally {
-        clearTimeout(timer);
-      }
-    });
-    guardChain = run.catch(() => {});
-    return { report: await run };
+    // The engine serializes its own fork work and never throws (bad Solidity → COMPILE_ERROR). The cap only guards a
+    // hung fork: past it the visitor gets the static scan instead of waiting.
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<'timeout'>((res) => { timer = setTimeout(() => res('timeout'), GUARD_AUDIT_TIMEOUT_MS); });
+    try {
+      const report: GuardReport | 'timeout' = await Promise.race([guardEngine().audit(source), timeout]);
+      if (report !== 'timeout') return { report };
+      app.log.warn('guard audit timed out on the fork; static-only report');
+      return { report: await staticGuard.audit(source) };
+    } finally {
+      clearTimeout(timer);
+    }
   });
 
   app.get<{ Params: { id: string } }>('/api/cars/:id', async (req, reply) => {

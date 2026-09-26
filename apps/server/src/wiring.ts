@@ -19,7 +19,10 @@ export interface Wiring {
   incidentsEns?: IncidentsEns;
   /** AI drafter for POST /api/incidents/draft; absent = template drafts. */
   draftLlm?: DraftLlm;
-  /** Fork RPC for Deploy Guard's deploy + proof-of-vulnerability; absent = static-only audits. */
+  /**
+   * RPC of Deploy Guard's own dedicated anvil fork (never the car/payment fork: its per-audit snapshot/revert would roll
+   * back concurrent runs). Set once that fork is ready, possibly after boot; absent = static-only audits.
+   */
   guardRpcUrl?: string;
   close?(): Promise<void>;
 }

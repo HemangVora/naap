@@ -114,6 +114,22 @@ describe('guard API', () => {
     expect((await again.json()).error).toMatch(/One audit per 8s/);
   });
 
+  it('picks up a guard fork that comes up after boot, and still answers when that fork is unreachable', async () => {
+    const w = fakeWiring();
+    const app = await buildApp(w, new MemoryStore());
+    await app.listen({ port: 0 });
+    try {
+      w.guardRpcUrl = 'http://127.0.0.1:1'; // set after buildApp, as wire.ts does once the dedicated fork is ready
+      const url = `http://127.0.0.1:${(app.server.address() as AddressInfo).port}/api/guard/audit`;
+      const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ source: GUARD_PRESETS.find((p) => p.id === 'faucet-token')!.source }) });
+      expect(r.status).toBe(200);
+      const { report } = await r.json();
+      expect(report.findings.map((f: { id: string }) => f.id)).toContain('unprotected-mint');
+    } finally {
+      await app.close();
+    }
+  });
+
   it('allows at most 20 drafts a minute across all clients', async () => {
     const app = await buildApp(fakeWiring(), new MemoryStore());
     await app.listen({ port: 0 });

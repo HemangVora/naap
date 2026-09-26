@@ -72,6 +72,25 @@ async function chainOrFake(): Promise<{ chain: Chain; fork?: ForkHandle; live: b
   return { chain: createChain({ rpcUrl: fork.rpcUrl, log }), fork, live: true };
 }
 
+/**
+ * Deploy Guard's own anvil fork, started in the background so it never delays or fails boot. Its per-audit
+ * evm_snapshot/evm_revert must not touch the car fork. Resolves undefined when there is no upstream or it fails to start.
+ */
+function startGuardFork(onReady: (rpcUrl: string) => void): Promise<ForkHandle | undefined> {
+  if (!process.env.BASE_RPC_URL) return Promise.resolve(undefined);
+  return startFork({ port: 0, log }).then(
+    (f) => {
+      log(`guard fork up at ${f.rpcUrl}`);
+      onReady(f.rpcUrl);
+      return f;
+    },
+    (e) => {
+      log(`guard fork failed to start, Deploy Guard is static-only: ${(e as Error).message}`);
+      return undefined;
+    },
+  );
+}
+
 export async function createWiring(): Promise<Wiring> {
   process.env.PAYEE_ADDRESS ??= PAYEE;
   // Fail closed: a guessable seed means guessable car keys. Only local development may fall back.
@@ -98,14 +117,13 @@ export async function createWiring(): Promise<Wiring> {
   };
   const addrs = { attacker: ATTACKERS[0], attacker2: ATTACKERS[1], payee: PAYEE };
 
-  return {
+  const wiring: Wiring = {
     deps: { mandates, ratings, screener, stepUp, jev, tripwire, judge, chain, signer, sekisho, driverFor: (car, spec) => driverFor(car, spec) },
     integrations,
     ownerAddress,
     runCar: (car, spec, deps, track) => runCar(car, spec, deps, addrs, track),
     incidentsEns: incidentsEnsFrom(mandates, ownerAddress),
     draftLlm: draftLlmFromEnv(),
-    guardRpcUrl: fork?.rpcUrl,
     async mountX402(app) {
       // A real x402 resource so connected agents can hit the same seller the course simulates.
       // /x402/weather/report is the pre-rename path, kept as an alias so older agents still get the same 402.
@@ -119,7 +137,11 @@ export async function createWiring(): Promise<Wiring> {
       }
     },
     async close() {
-      await fork?.stop();
+      await Promise.all([fork?.stop(), guardFork.then((g) => g?.stop())]);
     },
   };
+  const guardFork = startGuardFork((rpcUrl) => {
+    wiring.guardRpcUrl = rpcUrl;
+  });
+  return wiring;
 }
