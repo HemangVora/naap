@@ -1,4 +1,4 @@
-// Crumple × Sekisho — the frozen interface every lane codes against.
+// NaAP × Sekisho — the frozen interface every lane codes against.
 // Change only through the integrator (see CONTRACT.md §Rules).
 
 export type Address = `0x${string}`;
@@ -24,7 +24,7 @@ export interface Labeled<T> {
 
 // ─── Cars ────────────────────────────────────────────────────────────────────
 
-/** mcp = the owner's own agent (Claude Code, Cursor, …) drives the car through Crumple's MCP server. */
+/** mcp = the owner's own agent (Claude Code, Cursor, …) drives the car through NaAP's MCP server. */
 export type CarKind = 'built' | 'webhook' | 'openai' | 'mcp';
 export type Variant = 'bare' | 'airbag';
 
@@ -50,7 +50,7 @@ export interface CarSpec {
 }
 
 export interface Car {
-  id: string; // short slug, also the ENS label: <id>.crumple.eth
+  id: string; // short slug, also the ENS label: <id>.naap.eth
   spec: Omit<CarSpec, 'openaiApiKey'>;
   ensName: string;
   wallet: Address; // derived by the signer; the agent never sees its key
@@ -72,10 +72,10 @@ export interface CarPublic {
   ratingOnchain?: { txHash: Hex } | null;
 }
 
-// ─── Mandate (lives on ENSv2: <car>.crumple.eth text records) ────────────────
+// ─── Mandate (lives on ENSv2: <car>.naap.eth text records) ────────────────
 
 export interface MandatePayee {
-  ens: string; // e.g. "weather.crumple.eth"
+  ens: string; // e.g. "weather.naap.eth"
   address: Address; // resolved at read time — never typed by anyone
 }
 
@@ -97,11 +97,11 @@ export const MANDATE_KEYS = {
   expiresAt: 'sekisho.expiresAt',
 } as const;
 export const RATING_KEYS = {
-  stars: 'crumple.stars', // "0".."5"
-  lossBareUsd: 'crumple.lossBareUsd',
-  lossAirbagUsd: 'crumple.lossAirbagUsd',
-  summary: 'crumple.summary', // e.g. "bare 1/5 · airbag 5/5"
-  runAt: 'crumple.runAt',
+  stars: 'naap.stars', // "0".."5"
+  lossBareUsd: 'naap.lossBareUsd',
+  lossAirbagUsd: 'naap.lossAirbagUsd',
+  summary: 'naap.summary', // e.g. "bare 1/5 · airbag 5/5"
+  runAt: 'naap.runAt',
 } as const;
 
 // ─── The course ──────────────────────────────────────────────────────────────
@@ -137,7 +137,7 @@ export const DEFAULT_TRACK_ID = 'naap-standard';
 
 export interface ContentItem {
   kind: 'owner' | 'tweet' | 'web' | 'http402' | 'agent' | 'email';
-  source: string; // e.g. "@drb_whale reply", "GET weather.crumple.eth/report → 402"
+  source: string; // e.g. "@drb_whale reply", "GET weather.naap.eth/report → 402"
   text: string;
 }
 
@@ -235,7 +235,7 @@ export interface Verdict {
 
 /** lane ens */
 export interface MandateSource {
-  /** Create <carId>.crumple.eth with the default mandate (async on Sepolia; returns immediately with local copy). */
+  /** Create <carId>.naap.eth with the default mandate (async on Sepolia; returns immediately with local copy). */
   createForCar(carId: string, owner: Address): Promise<Mandate>;
   get(ensName: string): Promise<Mandate>;
   /** Resolve an ENS name to an address (payees). Label of the result is TOOL. */
@@ -268,7 +268,7 @@ export interface Screener {
 export interface StepUpRequest {
   carId: string;
   intentId: string;
-  summary: string; // "Pay $40 to weather.crumple.eth for 7-day forecast"
+  summary: string; // "Pay $40 to weather.naap.eth for 7-day forecast"
   ttlSec: number; // 60 for audience cars, 300 for owner car
   allowApproval: boolean; // false for audience cars → only DENIED/EXPIRED possible
 }
@@ -422,6 +422,8 @@ export interface RunReport {
   sekishoLossUsd: number;
   savedUsd: number;
   aiWritten: boolean; // false = deterministic fallback text
+  /** Model id that wrote headline/summary/bullets when aiWritten (additive, lane report). */
+  assessorModel?: string;
   createdAt: number;
 }
 

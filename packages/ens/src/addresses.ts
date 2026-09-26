@@ -51,7 +51,7 @@ export const RESOLVER_ROLES = {
 
 const withAdmin = (...roles: bigint[]) => roles.reduce((acc, r) => acc | r | admin(r), 0n);
 
-/** Root roles the relayer holds on the crumple.eth UserRegistry (can register/renew/unregister car subnames, set their resolvers). */
+/** Root roles the relayer holds on the naap.eth UserRegistry (can register/renew/unregister car subnames, set their resolvers). */
 export const RELAYER_REGISTRY_ROLES = withAdmin(
   REGISTRY_ROLES.REGISTRAR,
   REGISTRY_ROLES.REGISTER_RESERVED,
@@ -66,7 +66,7 @@ export const RELAYER_REGISTRY_ROLES = withAdmin(
 
 /**
  * Root roles the relayer holds on the PermissionedResolver. Deliberately NOT root ROLE_SET_TEXT:
- * text writes are granted per key (sekisho.* / crumple.*) via grantSetterRoles, using SET_TEXT_ADMIN.
+ * text writes are granted per key (sekisho.* / naap.*) via grantSetterRoles, using SET_TEXT_ADMIN.
  */
 export const RELAYER_RESOLVER_ROLES =
   withAdmin(REGISTRY_ROLES.UPGRADE, RESOLVER_ROLES.SET_ADDRESS, RESOLVER_ROLES.SET_NAME, RESOLVER_ROLES.LINK, RESOLVER_ROLES.SET_CONTENTHASH) |
@@ -86,6 +86,6 @@ export const REGISTRAR = {
   minCommitmentAgeSec: 60,
   maxCommitmentAgeSec: 86400,
   minDurationSec: 28 * 86400,
-  /** crumple.eth registration + car subname expiry. */
+  /** naap.eth registration + car subname expiry. */
   durationSec: 365 * 86400,
 } as const;

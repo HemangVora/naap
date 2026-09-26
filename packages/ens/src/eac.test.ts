@@ -13,13 +13,13 @@ describe('EAC proof formatting', () => {
   it('names the role, the key resource, the agent and the relayer for EACUnauthorizedAccountRoles', () => {
     const key = MANDATE_KEYS.perTxCapUsd;
     const detail = formatEacRevert({
-      ensName: 'zx9.crumple.eth',
+      ensName: 'zx9.naap.eth',
       key,
       agent: AGENT,
       relayer: RELAYER,
       revert: { errorName: 'EACUnauthorizedAccountRoles', args: [resolverResource(key), RESOLVER_ROLES.SET_TEXT, AGENT] },
     });
-    expect(detail).toContain('agent 0xabcd…ef01 called setText(zx9.crumple.eth, "sekisho.perTxCapUsd"');
+    expect(detail).toContain('agent 0xabcd…ef01 called setText(zx9.naap.eth, "sekisho.perTxCapUsd"');
     expect(detail).toContain('EACUnauthorizedAccountRoles');
     expect(detail).toContain('the agent key holds no ROLE_SET_TEXT on resource keccak("sekisho.perTxCapUsd")');
     expect(detail).toContain('only the relayer 0x1234…7890 holds it');
@@ -28,7 +28,7 @@ describe('EAC proof formatting', () => {
 
   it('links the on-chain tx when one was sent', () => {
     const detail = formatEacRevert({
-      ensName: 'zx9.crumple.eth',
+      ensName: 'zx9.naap.eth',
       key: 'sekisho.payees',
       agent: AGENT,
       revert: { errorName: 'EACUnauthorizedAccountRoles', args: [1n, RESOLVER_ROLES.SET_TEXT, AGENT] },
@@ -39,8 +39,8 @@ describe('EAC proof formatting', () => {
   });
 
   it('falls back sensibly for other errors', () => {
-    expect(formatEacRevert({ ensName: 'a.crumple.eth', key: 'k', agent: AGENT, revert: { errorName: 'InvalidRecord', args: [] } })).toContain('reverted with InvalidRecord()');
-    expect(formatEacRevert({ ensName: 'a.crumple.eth', key: 'k', agent: AGENT, revert: { raw: 'execution reverted' } })).toContain('reverted: execution reverted');
+    expect(formatEacRevert({ ensName: 'a.naap.eth', key: 'k', agent: AGENT, revert: { errorName: 'InvalidRecord', args: [] } })).toContain('reverted with InvalidRecord()');
+    expect(formatEacRevert({ ensName: 'a.naap.eth', key: 'k', agent: AGENT, revert: { raw: 'execution reverted' } })).toContain('reverted: execution reverted');
   });
 
   it('decodeRevert extracts the custom error from a viem ContractFunctionRevertedError', () => {

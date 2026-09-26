@@ -27,7 +27,7 @@ const startedAt = Date.now();
 const handle = await stepUp.request({
   carId: 'try',
   intentId: `try-${startedAt}`,
-  summary: 'Pay $40 to weather.crumple.eth for the 7-day forecast',
+  summary: 'Pay $40 to weather.naap.eth for the 7-day forecast',
   ttlSec,
   allowApproval: true,
 });

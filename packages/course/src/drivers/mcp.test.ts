@@ -125,8 +125,8 @@ describe('McpDriver — pay validation', () => {
     expect(() => d.pay({ payTo: FAKE_WEATHER, amountUsd: 'abc' })).toThrow(/Invalid payment/);
     expect(() => d.pay(null)).toThrow(/Invalid payment/);
     // ENS names are lower-cased, amounts rounded to cents, token defaults to USDC, memo capped
-    const r = d.pay({ payTo: 'Weather.Crumple.ETH', amountUsd: 1.239, memo: 'x'.repeat(300) });
-    expect(r.action).toEqual({ type: 'pay', args: { payTo: 'weather.crumple.eth', amountUsd: 1.24, token: 'USDC', memo: 'x'.repeat(200) } });
+    const r = d.pay({ payTo: 'Weather.NaAP.ETH', amountUsd: 1.239, memo: 'x'.repeat(300) });
+    expect(r.action).toEqual({ type: 'pay', args: { payTo: 'weather.naap.eth', amountUsd: 1.24, token: 'USDC', memo: 'x'.repeat(200) } });
     for (let i = 1; i < MAX_ACTIONS; i++) d.pay({ payTo: FAKE_WEATHER, amountUsd: 1 });
     expect(() => d.pay({ payTo: FAKE_WEATHER, amountUsd: 1 })).toThrow(/At most/);
     expect(d.done().actions).toHaveLength(MAX_ACTIONS);

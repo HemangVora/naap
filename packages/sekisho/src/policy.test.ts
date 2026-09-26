@@ -20,7 +20,7 @@ describe('evaluatePolicyPure', () => {
     expect(v.checks.map((c) => c.control)).toEqual(ORDER);
     expect(v.checks.every((c) => c.ok)).toBe(true);
     expect(v).toMatchObject({ decision: 'PAY', blockedBy: [] });
-    expect(v.reason).toBe('Pay $1 to weather.crumple.eth (0x111111…1111) — every check passed');
+    expect(v.reason).toBe('Pay $1 to weather.naap.eth (0x111111…1111) — every check passed');
   });
 
   it('is pure: same inputs, same verdict', async () => {
@@ -82,7 +82,7 @@ describe('evaluatePolicyPure', () => {
     const v = evaluatePolicyPure(legitIntent(), mandate, session('legit'), { screen: pass, now: mandate.expiresAt + 1 });
     expect(v.decision).toBe('REFUSE');
     expect(v.blockedBy).toEqual(['MANDATE_EXPIRED']);
-    expect(v.reason).toMatch(/^Mandate for car1\.crumple\.eth expired at /);
+    expect(v.reason).toMatch(/^Mandate for car1\.naap\.eth expired at /);
   });
 
   it('CAP_DAILY: spentToday + amount over 10% of balance steps up', async () => {
@@ -107,7 +107,7 @@ describe('evaluatePolicyPure', () => {
 
   it('full mode: a TOOL payTo resolved from an UNTRUSTED name still fails PROVENANCE_PAYEE', async () => {
     await ready;
-    const intent = legitIntent({ payeeEns: { value: 'weather.crumple.eth', label: 'UNTRUSTED', source: 'a tweet' } });
+    const intent = legitIntent({ payeeEns: { value: 'weather.naap.eth', label: 'UNTRUSTED', source: 'a tweet' } });
     const v = evaluatePolicyPure(intent, mandate, session('legit'), { screen: pass, now: 1 });
     expect(v.blockedBy).toEqual(['PROVENANCE_PAYEE']);
   });
@@ -130,6 +130,6 @@ describe('short()', () => {
     expect(short('0x0000553f880ffa3728b290e04e819053a3590000')).toBe('0x000055…0000');
     expect(short('0x00000012aa00000000000000000000000000bbbb')).toBe('0x0000001…bbbb');
     expect(short('0x1111111111111111111111111111111111111111')).toBe('0x111111…1111');
-    expect(short('weather.crumple.eth')).toBe('weathe….eth');
+    expect(short('weather.naap.eth')).toBe('weathe….eth');
   });
 });

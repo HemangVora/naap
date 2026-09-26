@@ -144,7 +144,7 @@ function tidy(text: string, max: number): string {
   return `${cut.slice(0, Math.max(cut.lastIndexOf(' '), max - 24))}…`;
 }
 
-/** "fetch_quote(weather.crumple.eth) → pay($q.amount ≤ $2 to weather.crumple.eth)" */
+/** "fetch_quote(weather.naap.eth) → pay($q.amount ≤ $2 to weather.naap.eth)" */
 export function describePlan(plan: Plan): string {
   if (!plan.steps.length) return 'empty plan';
   return plan.steps

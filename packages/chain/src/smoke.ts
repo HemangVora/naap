@@ -29,7 +29,7 @@ async function main() {
     console.log(`[smoke] car ${car.address} funded → $${await chain.balanceUsd(car.address)} USDC`);
 
     // 1) legit x402: 402 body → buyer signs → seller verifies → facilitator settles
-    const req = paymentRequirements({ payTo: weather, priceUsd: 1, resource: 'https://weather.crumple.eth/report', description: "Today's Tokyo weather report" });
+    const req = paymentRequirements({ payTo: weather, priceUsd: 1, resource: 'https://weather.naap.eth/report', description: "Today's Tokyo weather report" });
     console.log('[smoke] 402 body:', JSON.stringify(paymentRequiredBody(req)));
     const header = await createXPayment(car, req);
     const v = await verifyPayment(header, req);

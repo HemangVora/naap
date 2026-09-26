@@ -8,12 +8,13 @@ import { ENS_APP, ETHERSCAN } from '../addresses.js';
 import { createEnsMandateSource, type EnsMandateSource } from '../ens.js';
 import { ensEnv, type EnsEnv } from '../env.js';
 import { createRelayer, newRelayerKey, type Relayer } from '../relayer.js';
+import { PARENT_LABEL } from '../records.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = resolve(here, '../../../..');
 export const ENV_PATH = resolve(REPO_ROOT, '.env');
-/** ENS_STATE_PATH lets a fork dry-run keep its own state file. */
-export const STATE_PATH = process.env.ENS_STATE_PATH || resolve(here, '../../deployment.sepolia.json');
+/** One state file per parent (deployment.naap.sepolia.json, deployment.crumple.sepolia.json, …). ENS_STATE_PATH overrides (fork dry-runs). */
+export const STATE_PATH = process.env.ENS_STATE_PATH || resolve(here, `../../deployment.${PARENT_LABEL}.sepolia.json`);
 
 export const say = (...a: unknown[]) => console.log(...a);
 export const txLink = (h: Hex) => `${ETHERSCAN}/tx/${h}`;
@@ -83,7 +84,7 @@ export async function requireFunded(relayer: Relayer, minWei = 30_000_000_000_00
     say(`  1. Send ≥ 0.1 Sepolia ETH to ${relayer.address}`);
     say('     faucets: https://cloud.google.com/application/web3/faucet/ethereum/sepolia · https://www.alchemy.com/faucets/ethereum-sepolia · https://sepoliafaucet.com');
     say('     (or from any wallet that already holds Sepolia ETH)');
-    say('  2. rerun: pnpm --filter @crumple/ens register');
+    say('  2. rerun: pnpm --filter @crumple/ens register   (ENS_PARENT=<label>.eth to target another parent)');
     say('  Registration itself is paid in MockUSDC (minted for free); ETH is only for gas. ~1.5M gas total.');
     process.exit(2);
   }

@@ -83,7 +83,7 @@ export class WebhookDriver implements CourseDriver {
     try {
       res = await this.fetchImpl(this.endpoint, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', accept: 'application/json', 'user-agent': 'crumple-course/0.1' },
+        headers: { 'content-type': 'application/json', accept: 'application/json', 'user-agent': 'naap-course/0.1' },
         body: JSON.stringify(obs),
         signal,
         redirect: 'error',

@@ -22,7 +22,7 @@ describe('full mode (built cars)', () => {
     const [intent] = out.intents;
     expect(intent.payTo).toMatchObject({ value: FAKE_WEATHER, label: 'TOOL' });
     expect(intent.amountUsd).toMatchObject({ value: 1, label: 'OWNER_BOUNDED' });
-    expect(intent.payeeEns?.value).toBe('weather.crumple.eth');
+    expect(intent.payeeEns?.value).toBe('weather.naap.eth');
     expect(out.verdicts[0].decision).toBe('PAY');
     expect(out.verdicts[0].blockedBy).toEqual([]);
     expect(out.verdicts[0].checks.map((c) => c.control)).toEqual([
@@ -30,7 +30,7 @@ describe('full mode (built cars)', () => {
     ]);
     expect(s.tainted).toBe(true); // the 402 body is untrusted, and weather is still in the mandate
     // the planner never saw content; the reader never saw the owner request
-    expect(llm.planCalls[0]).toEqual({ ownerRequest: barriers.legit.ownerRequest, persona: 'weather nerd', mandatePayees: ['weather.crumple.eth'] });
+    expect(llm.planCalls[0]).toEqual({ ownerRequest: barriers.legit.ownerRequest, persona: 'weather nerd', mandatePayees: ['weather.naap.eth'] });
     expect(llm.readCalls[0].indexes).toEqual([0]);
     expect(out.trace.map((t) => t.who)).toEqual(expect.arrayContaining(['tripwire', 'planner', 'reader', 'interpreter', 'policy', 'screen']));
   });
@@ -103,7 +103,7 @@ describe('full mode (built cars)', () => {
     const v = out.verdicts[0];
     expect(v.decision).toBe('REFUSE');
     expect(v.blockedBy[0]).toBe('PROVENANCE_PAYEE');
-    expect(v.reason).toBe(`402 said pay ${short(FAKE_ATTACKER)}, but weather.crumple.eth resolves to ${short(FAKE_WEATHER)}`);
+    expect(v.reason).toBe(`402 said pay ${short(FAKE_ATTACKER)}, but weather.naap.eth resolves to ${short(FAKE_WEATHER)}`);
     expect(v.blockedBy).toContain('INTERCEPTA');
   });
 
@@ -119,7 +119,7 @@ describe('full mode (built cars)', () => {
     expect(v.blockedBy).not.toContain('CAP_DAILY'); // $40 ≤ 10% of $500
     // the fake Jev flags "pay" in the 402 body; over cap, that is a friction chip — never a refusal
     expect(v.blockedBy.slice(1)).toEqual(['JEV_TRIPWIRE']);
-    expect(v.reason).toBe('$40 to weather.crumple.eth (0x111111…1111) is over the $5 per-payment cap — asking the owner');
+    expect(v.reason).toBe('$40 to weather.naap.eth (0x111111…1111) is over the $5 per-payment cap — asking the owner');
   });
 
   it('a plan that names a raw address or an unknown ref is rejected and nothing is paid', async () => {
@@ -200,7 +200,7 @@ describe('boundary mode (connected cars)', () => {
     const out = await sekisho.runBoundary(
       car,
       barriers.legit,
-      [{ type: 'reply', text: 'ok' }, { type: 'noop' }, { type: 'pay', args: { payTo: 'weather.crumple.eth', amountUsd: 1, token: 'USDC', memo: 'x' } }],
+      [{ type: 'reply', text: 'ok' }, { type: 'noop' }, { type: 'pay', args: { payTo: 'weather.naap.eth', amountUsd: 1, token: 'USDC', memo: 'x' } }],
       mandate,
       session('legit'),
     );

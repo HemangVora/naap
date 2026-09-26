@@ -10,9 +10,9 @@ describe('names', () => {
     expect(() => toLabel('___')).toThrow();
   });
   it('carEnsName / labelOf round-trip', () => {
-    expect(carEnsName('zx9')).toBe('zx9.crumple.eth');
-    expect(labelOf('zx9.crumple.eth')).toBe('zx9');
-    expect(labelOf('a.b.crumple.eth')).toBeNull();
+    expect(carEnsName('zx9')).toBe('zx9.naap.eth');
+    expect(labelOf('zx9.naap.eth')).toBe('zx9');
+    expect(labelOf('a.b.naap.eth')).toBeNull();
     expect(labelOf('vitalik.eth')).toBeNull();
   });
   it('labelId matches LibLabel.id (keccak of the label bytes)', () => {
@@ -20,15 +20,15 @@ describe('names', () => {
     expect(resolverResource('sekisho.payees')).toBe(BigInt(keccak256(stringToBytes('sekisho.payees'))));
   });
   it('dnsName is the DNS wire format', () => {
-    expect(dnsName('zx9.crumple.eth')).toBe('0x037a7839076372756d706c650365746800');
+    expect(dnsName('zx9.naap.eth')).toBe('0x037a7839046e6161700365746800');
   });
 });
 
 describe('mandate records', () => {
   const m: Mandate = {
-    ensName: 'zx9.crumple.eth',
+    ensName: 'zx9.naap.eth',
     owner: '0x0000000000000000000000000000000000000001',
-    payees: [{ ens: 'Weather.crumple.eth', address: '0x1111111111111111111111111111111111111111' }],
+    payees: [{ ens: 'Weather.naap.eth', address: '0x1111111111111111111111111111111111111111' }],
     perTxCapUsd: 5,
     dailyCapBps: 1000,
     expiresAt: 1_800_000_000,
@@ -38,8 +38,8 @@ describe('mandate records', () => {
     const recs = encodeMandateRecords(m);
     expect(recs.map((r) => r.key)).toEqual(Object.values(MANDATE_KEYS));
     const obj = Object.fromEntries(recs.map((r) => [r.key, r.value]));
-    expect(obj[MANDATE_KEYS.payees]).toBe('weather.crumple.eth');
-    expect(parseMandateRecords(obj)).toEqual({ payees: ['weather.crumple.eth'], perTxCapUsd: 5, dailyCapBps: 1000, expiresAt: 1_800_000_000 });
+    expect(obj[MANDATE_KEYS.payees]).toBe('weather.naap.eth');
+    expect(parseMandateRecords(obj)).toEqual({ payees: ['weather.naap.eth'], perTxCapUsd: 5, dailyCapBps: 1000, expiresAt: 1_800_000_000 });
   });
   it('fractional caps survive', () => {
     const obj = Object.fromEntries(encodeMandateRecords({ ...m, perTxCapUsd: 2.5 }).map((r) => [r.key, r.value]));
@@ -48,7 +48,7 @@ describe('mandate records', () => {
   it('returns null when nothing is written and throws on garbage', () => {
     expect(parseMandateRecords({})).toBeNull();
     expect(parseMandateRecords({ [MANDATE_KEYS.payees]: '', [MANDATE_KEYS.perTxCapUsd]: '5' })).toBeNull();
-    expect(() => parseMandateRecords({ [MANDATE_KEYS.payees]: 'weather.crumple.eth', [MANDATE_KEYS.perTxCapUsd]: 'lots' })).toThrow(/malformed/);
+    expect(() => parseMandateRecords({ [MANDATE_KEYS.payees]: 'weather.naap.eth', [MANDATE_KEYS.perTxCapUsd]: 'lots' })).toThrow(/malformed/);
   });
 });
 

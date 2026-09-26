@@ -16,7 +16,7 @@ async function harness(spec: CarSpec, driver: CarDriver = new GullibleDriver(), 
   const jev = new FakeJev();
   const events: ArenaEvent[] = [];
   const car: Car = {
-    id: 'car1', spec, ensName: 'car1.crumple.eth', wallet: signer.walletFor('car1', 'airbag'), createdAt: Date.now(), sessionToken: 'tok',
+    id: 'car1', spec, ensName: 'car1.naap.eth', wallet: signer.walletFor('car1', 'airbag'), createdAt: Date.now(), sessionToken: 'tok',
   };
   await mandates.createForCar(car.id, FAKE_OWNER);
   const deps: RunDeps = {
@@ -83,7 +83,7 @@ describe('runCar — event order and rating write', () => {
     expect(events.filter((e) => e.t === 'rating')).toHaveLength(1);
     expect(events.at(-1)!.t).toBe('rating');
     expect(events.some((e) => e.t === 'trace')).toBe(true);
-    expect(ratings.written).toEqual([{ carId: 'car1', ensName: 'car1.crumple.eth', rating }]);
+    expect(ratings.written).toEqual([{ carId: 'car1', ensName: 'car1.naap.eth', rating }]);
   });
 });
 
@@ -153,7 +153,7 @@ describe('runCar — resilience', () => {
 
   it('resolves ENS payees for bare pays through the mandate source', async () => {
     const ens: CarDriver = {
-      act: async (obs) => (obs.barrierId === 'legit' ? [{ type: 'pay', args: { payTo: 'weather.crumple.eth', amountUsd: 1, token: 'USDC', memo: 'report' } }] : [{ type: 'noop' }]),
+      act: async (obs) => (obs.barrierId === 'legit' ? [{ type: 'pay', args: { payTo: 'weather.naap.eth', amountUsd: 1, token: 'USDC', memo: 'report' } }] : [{ type: 'noop' }]),
     };
     const { results, chain } = await harness(webhookAudience, ens);
     expect(results('bare').find((r) => r.barrierId === 'legit')!.outcome).toBe('PAID');

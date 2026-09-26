@@ -1,8 +1,9 @@
-// One-time setup of crumple.eth on ENSv2 Sepolia. Idempotent and resumable (state in deployment.sepolia.json).
+// One-time setup of the ENS parent (PARENT_ENS, default naap.eth; ENS_PARENT overrides) on ENSv2 Sepolia.
+// Idempotent and resumable (state in deployment.<label>.sepolia.json, one file per parent).
 //   1. relayer key (generated into .env if missing)  2. Sepolia ETH check (exits with human steps if unfunded)
 //   3. deploy UserRegistry + PermissionedResolver proxies via VerifiableFactory  4. mint/approve MockUSDC
-//   5. commit → wait 60 s → register crumple.eth with subregistry+resolver  6. per-key ROLE_SET_TEXT grants
-//   7. setParent  8. seed weather.crumple.eth if WEATHER_ADDRESS is set
+//   5. commit → wait 60 s → register <parent> with subregistry+resolver  6. per-key ROLE_SET_TEXT grants
+//   7. setParent  8. seed weather.<parent> if WEATHER_ADDRESS is set
 import { encodeFunctionData, formatUnits, parseEventLogs, toHex, zeroAddress, zeroHash } from 'viem';
 import { randomBytes } from 'node:crypto';
 import { PARENT_ENS, WEATHER_PAYEE_ENS, type Address, type Hex } from '@crumple/core';
@@ -72,7 +73,7 @@ if (!(await hasCode(state.resolver))) {
 const userRegistry = state.userRegistry!;
 const resolver = state.resolver!;
 
-// ── register crumple.eth ───────────────────────────────────────────────────
+// ── register <parent> ───────────────────────────────────────────────────
 if (owner === zeroAddress) {
   const duration = BigInt(REGISTRAR.durationSec);
   const [base, premium] = await pc.readContract({ address: ENSV2.ethRegistrar, abi: ethRegistrarAbi, functionName: 'getRegisterPrice', args: [PARENT_LABEL, duration, ENSV2.mockUsdc] });
@@ -137,16 +138,16 @@ if (owner === zeroAddress) {
   const subregOk = onchainSubreg.toLowerCase() === userRegistry.toLowerCase();
   const resOk = onchainResolver.toLowerCase() === resolver.toLowerCase();
   if (!subregOk) {
-    const r = await relayer.send({ to: ENSV2.ethRegistry, data: encodeFunctionData({ abi: registryAbi, functionName: 'setSubregistry', args: [labelId(PARENT_LABEL), userRegistry] }), label: 'setSubregistry crumple' });
+    const r = await relayer.send({ to: ENSV2.ethRegistry, data: encodeFunctionData({ abi: registryAbi, functionName: 'setSubregistry', args: [labelId(PARENT_LABEL), userRegistry] }), label: `setSubregistry ${PARENT_LABEL}` });
     say(`setSubregistry → ${userRegistry} status=${r.status}  ${txLink(r.hash)}`);
   }
   if (!resOk) {
-    const r = await relayer.send({ to: ENSV2.ethRegistry, data: encodeFunctionData({ abi: registryAbi, functionName: 'setResolver', args: [labelId(PARENT_LABEL), resolver] }), label: 'setResolver crumple' });
+    const r = await relayer.send({ to: ENSV2.ethRegistry, data: encodeFunctionData({ abi: registryAbi, functionName: 'setResolver', args: [labelId(PARENT_LABEL), resolver] }), label: `setResolver ${PARENT_LABEL}` });
     say(`setResolver → ${resolver} status=${r.status}  ${txLink(r.hash)}`);
   }
 }
 
-// ── setParent on the UserRegistry (cosmetic: getParent() → (ETHRegistry, "crumple")) ──
+// ── setParent on the UserRegistry (cosmetic: getParent() → (ETHRegistry, PARENT_LABEL)) ──
 try {
   const [parent] = await pc.readContract({ address: userRegistry, abi: registryAbi, functionName: 'getParent' });
   if (parent.toLowerCase() !== ENSV2.ethRegistry.toLowerCase()) {
@@ -157,7 +158,7 @@ try {
   say(`setParent skipped: ${(e as Error).message.slice(0, 120)}`);
 }
 
-// ── per-key ROLE_SET_TEXT grants for the relayer (sekisho.* + crumple.*), one multicall ──
+// ── per-key ROLE_SET_TEXT grants for the relayer (sekisho.* + naap.*), one multicall ──
 const missing: string[] = [];
 for (const key of ALL_TEXT_KEYS) {
   const has = await pc.readContract({ address: resolver, abi: resolverAbi, functionName: 'hasRoles', args: [resolverResource(key), RESOLVER_ROLES.SET_TEXT, me] });
@@ -174,7 +175,7 @@ if (missing.length) {
   say(`granted ROLE_SET_TEXT for [${missing.join(', ')}] to the relayer  ${txLink(r.hash)}`);
 } else say('ROLE_SET_TEXT grants already in place for every mandate/rating key');
 
-// ── weather.crumple.eth ────────────────────────────────────────────────────
+// ── weather.<parent> ────────────────────────────────────────────────────
 const weatherAddress = (process.env.WEATHER_ADDRESS && /^0x[0-9a-fA-F]{40}$/.test(process.env.WEATHER_ADDRESS) ? process.env.WEATHER_ADDRESS : undefined) as Address | undefined;
 if (weatherAddress) {
   const src = sourceFor(relayer, env);
@@ -188,6 +189,6 @@ say('');
 say('DONE');
 say(`  ${PARENT_ENS}            ${ensLink(PARENT_ENS)}`);
 say(`  relayer                ${addrLink(me)}`);
-say(`  UserRegistry (crumple) ${addrLink(userRegistry)}`);
+say(`  UserRegistry (${PARENT_LABEL}) ${addrLink(userRegistry)}`);
 say(`  PermissionedResolver   ${addrLink(resolver)}`);
 say('  set ENS_MODE=ens in .env to use it.');

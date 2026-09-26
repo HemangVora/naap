@@ -1,4 +1,4 @@
-// weather.crumple.eth → address (arg or WEATHER_ADDRESS). Registers the subname if needed and sets the addr record.
+// weather.naap.eth → address (arg or WEATHER_ADDRESS). Registers the subname if needed and sets the addr record.
 import { WEATHER_PAYEE_ENS, type Address } from '@crumple/core';
 import { seedWeather } from '../seed.js';
 import { ensLink, ensureRelayer, loadState, positional, requireFunded, saveState, say, sourceFor, txLink } from './common.js';

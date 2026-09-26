@@ -1,4 +1,4 @@
-// weather.crumple.eth → the weather payee address (addr record, coinType 60). Used by `seed-weather` and `register`.
+// weather.naap.eth → the weather payee address (addr record, coinType 60). Used by `seed-weather` and `register`.
 import { encodeFunctionData } from 'viem';
 import { WEATHER_PAYEE_ENS, type Address, type Hex } from '@crumple/core';
 import { resolverAbi } from './abi.js';

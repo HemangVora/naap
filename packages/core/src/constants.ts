@@ -1,7 +1,21 @@
 import { BARRIER_ORDER, DEFAULT_TRACK_ID, type TrackSpec } from './types.js';
 
-export const PARENT_ENS = 'crumple.eth';
-export const WEATHER_PAYEE_ENS = 'weather.crumple.eth';
+/** The product's ENS parent. Every car is `<id>.<parent>`; the weather payee is `weather.<parent>`. */
+export const DEFAULT_PARENT_ENS = 'naap.eth';
+
+/**
+ * ENS_PARENT (server/scripts only; browsers have no `process`) overrides the parent, e.g. `crumple.eth` for the
+ * earlier deployment. Must be a single label under .eth.
+ */
+function parentFromEnv(): string | undefined {
+  const raw = typeof process !== 'undefined' ? process.env?.ENS_PARENT?.trim().toLowerCase() : undefined;
+  if (!raw) return undefined;
+  if (!/^[a-z0-9-]{1,63}\.eth$/.test(raw)) throw new Error(`ENS_PARENT must look like "<label>.eth", got "${raw}"`);
+  return raw;
+}
+
+export const PARENT_ENS: string = parentFromEnv() ?? DEFAULT_PARENT_ENS;
+export const WEATHER_PAYEE_ENS = `weather.${PARENT_ENS}`;
 
 /** Default mandate every car gets (CONTRACT.md §Mandate). */
 export const DEFAULT_MANDATE = {

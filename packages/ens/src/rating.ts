@@ -1,4 +1,4 @@
-// RatingWriter on ENSv2 Sepolia: RATING_KEYS text records on <car>.crumple.eth, through the ONE relayer queue.
+// RatingWriter on ENSv2 Sepolia: RATING_KEYS text records on <car>.naap.eth, through the ONE relayer queue.
 // Never throws into callers; fires onConfirmed(carId, txHash) once mined.
 import type { Hex, Rating, RatingWriter } from '@crumple/core';
 import type { EnsMandateSource } from './ens.js';

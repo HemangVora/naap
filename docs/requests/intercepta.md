@@ -2,7 +2,7 @@
 
 1. **WEATHER_SEED derivation (lane chain / sekisho / ens).** `@crumple/intercepta` derives the weather payee as
    `privateKeyToAccount(keccak256(toBytes(WEATHER_SEED)))` (or uses the seed directly when it is a 0x 32-byte hex).
-   Anyone who needs the same address/key (x402 seller helper, `weather.crumple.eth` resolution) should import
+   Anyone who needs the same address/key (x402 seller helper, `weather.naap.eth` resolution) should import
    `weatherAddress()` / `weatherAccount()` from `@crumple/intercepta` rather than re-deriving. Worked around locally: exported both.
 
 2. **`ScreenResult` extra fields (core, optional).** My results carry `reason`, `source: 'live'|'cache'|'fixture'|'fake'`,

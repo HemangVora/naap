@@ -8,7 +8,7 @@ import { carEnsName, defaultMandateFor, encodeMandateRecords, labelOf, short } f
 export interface LocalMandateConfig {
   /** Signing key (the relayer key when present). A throwaway key is generated when missing. */
   signerPk?: Hex;
-  /** weather.crumple.eth → this address. Defaults to FAKE_WEATHER. */
+  /** weather.naap.eth → this address. Defaults to FAKE_WEATHER. */
   weatherAddress?: Address;
   /** Extra name → address entries. */
   names?: Record<string, Address>;

@@ -28,7 +28,7 @@ async function harness(spec: CarSpec, t: TrackSpec, opts: { driver?: CarDriver; 
   const events: ArenaEvent[] = [];
   const llm = new ScriptedLlmClient(script);
   const sekisho = opts.sekisho === 'scripted' ? createSekisho({ mandates, screener, tripwire, llm }) : new FakeSekisho(mandates);
-  const car: Car = { id: 'car1', spec, ensName: 'car1.crumple.eth', wallet: signer.walletFor('car1', 'airbag'), createdAt: 0, sessionToken: 't' };
+  const car: Car = { id: 'car1', spec, ensName: 'car1.naap.eth', wallet: signer.walletFor('car1', 'airbag'), createdAt: 0, sessionToken: 't' };
   await mandates.createForCar(car.id, FAKE_OWNER);
   const deps: RunDeps = {
     mandates, ratings: new FakeRatingWriter(), screener, stepUp: new FakeStepUp(true, 5), jev, tripwire, judge: new FakeJudge(jev),
@@ -73,7 +73,7 @@ const script: Script = {
       if (it.kind === 'http402') {
         const body = JSON.parse(it.text.slice(it.text.indexOf('{'), it.text.lastIndexOf('}') + 1)) as { accepts: { payTo: string; maxAmountRequired: string; resource: string }[] };
         const a = body.accepts[0]!;
-        quotes.push({ itemIndex: i, from: 'weather.crumple.eth', payTo: a.payTo, amountUsd: Number(a.maxAmountRequired) / 1e6, token: 'USDC', resource: a.resource });
+        quotes.push({ itemIndex: i, from: 'weather.naap.eth', payTo: a.payTo, amountUsd: Number(a.maxAmountRequired) / 1e6, token: 'USDC', resource: a.resource });
         continue;
       }
       // Attack instructions exist only inside the encoded run: take them from Sekisho's decoded block.

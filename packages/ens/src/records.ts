@@ -3,7 +3,7 @@ import { keccak256, stringToBytes, toHex, type Hex } from 'viem';
 import { namehash, normalize, packetToBytes } from 'viem/ens';
 import { DEFAULT_MANDATE, MANDATE_KEYS, PARENT_ENS, RATING_KEYS, type Address, type Mandate, type Rating } from '@crumple/core';
 
-export const PARENT_LABEL = PARENT_ENS.replace(/\.eth$/, ''); // "crumple"
+export const PARENT_LABEL = PARENT_ENS.replace(/\.eth$/, ''); // "naap" by default
 
 export interface TextRecord {
   key: string;
@@ -25,7 +25,7 @@ export function carEnsName(carId: string): string {
   return `${toLabel(carId)}.${PARENT_ENS}`;
 }
 
-/** `<label>.crumple.eth` → label, or null when the name is not under crumple.eth. */
+/** `<label>.<parent>` → label, or null when the name is not directly under the parent. */
 export function labelOf(ensName: string): string | null {
   const n = ensName.toLowerCase();
   const suffix = `.${PARENT_ENS}`;

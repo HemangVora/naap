@@ -1,4 +1,4 @@
-// The agent key (no roles) tries setText on <car>.crumple.eth and is rejected by the PermissionedResolver.
+// The agent key (no roles) tries setText on <car>.naap.eth and is rejected by the PermissionedResolver.
 //   pnpm --filter @crumple/ens prove-eac [carId] [--send] [--fund]
 //   --send  broadcast the reverting tx from the agent key (on Etherscan); --fund lets the relayer top the agent up with 0.002 ETH.
 import { carEnsName } from '../records.js';

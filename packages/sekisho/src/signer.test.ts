@@ -49,7 +49,7 @@ describe('createSigner', () => {
 
   it('refuses a tampered payTo even with a PAY verdict', async () => {
     const mandate = await mandateP;
-    const tampered = legitIntent({ payTo: { value: FAKE_ATTACKER, label: 'TOOL', source: 'resolve(weather.crumple.eth)' } });
+    const tampered = legitIntent({ payTo: { value: FAKE_ATTACKER, label: 'TOOL', source: 'resolve(weather.naap.eth)' } });
     await expect(signer.authorize(tampered, pay, mandate)).rejects.toThrow(/not a mandate payee/);
     const untrusted = legitIntent({ payTo: { value: FAKE_WEATHER, label: 'UNTRUSTED', source: '402 body' } });
     await expect(signer.authorize(untrusted, pay, mandate)).rejects.toThrow(/UNTRUSTED/);

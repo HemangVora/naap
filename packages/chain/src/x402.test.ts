@@ -70,7 +70,7 @@ describe('eip3009', () => {
 });
 
 describe('x402', () => {
-  const req = paymentRequirements({ payTo: weather, priceUsd: 1, resource: 'https://weather.crumple.eth/report', description: "Today's Tokyo weather report" });
+  const req = paymentRequirements({ payTo: weather, priceUsd: 1, resource: 'https://weather.naap.eth/report', description: "Today's Tokyo weather report" });
 
   it('produces a realistic exact-scheme 402 body for Base', () => {
     const body = paymentRequiredBody(req);

@@ -9,36 +9,36 @@ describe('local mandate source', () => {
   it('round-trips a signed mandate and resolves payees at read time', async () => {
     const src = createLocalMandateSource({ signerPk: PK });
     const created = await src.createForCar('Zx9', OWNER);
-    expect(created.ensName).toBe('zx9.crumple.eth');
+    expect(created.ensName).toBe('zx9.naap.eth');
     expect(created.source).toBe('local');
-    expect(created.payees).toEqual([{ ens: 'weather.crumple.eth', address: FAKE_WEATHER }]);
-    const got = await src.get('ZX9.crumple.eth');
+    expect(created.payees).toEqual([{ ens: 'weather.naap.eth', address: FAKE_WEATHER }]);
+    const got = await src.get('ZX9.naap.eth');
     expect(got.owner).toBe(OWNER);
     expect(got.perTxCapUsd).toBe(5);
     expect(got.dailyCapBps).toBe(1000);
     expect(got.expiresAt).toBeGreaterThan(Date.now() / 1000);
-    expect(await src.resolve('weather.crumple.eth')).toBe(FAKE_WEATHER);
-    expect(await src.resolve('zx9.crumple.eth')).toBe(OWNER);
-    expect(await src.resolve('nobody.crumple.eth')).toBeNull();
-    expect(src.status('zx9.crumple.eth')).toBe('confirmed');
-    await expect(src.get('nope.crumple.eth')).rejects.toThrow(/no mandate/);
+    expect(await src.resolve('weather.naap.eth')).toBe(FAKE_WEATHER);
+    expect(await src.resolve('zx9.naap.eth')).toBe(OWNER);
+    expect(await src.resolve('nobody.naap.eth')).toBeNull();
+    expect(src.status('zx9.naap.eth')).toBe('confirmed');
+    await expect(src.get('nope.naap.eth')).rejects.toThrow(/no mandate/);
   });
 
   it('envelope is EIP-191 signed by the configured signer and tampering is detected', async () => {
     const src = createLocalMandateSource({ signerPk: PK, weatherAddress: '0x2222222222222222222222222222222222222222' });
     await src.createForCar('t1', OWNER);
-    const env = src.envelope('t1.crumple.eth')!;
+    const env = src.envelope('t1.naap.eth')!;
     expect(env.signer).toBe(src.signer);
     expect(env.signature).toMatch(/^0x[0-9a-f]{130}$/);
     expect(canonicalMandateJson(env.mandate)).toContain('"perTxCapUsd":5');
     env.mandate.perTxCapUsd = 500; // an attacker edits the stored JSON
-    await expect(src.get('t1.crumple.eth')).rejects.toThrow(/signature/);
+    await expect(src.get('t1.naap.eth')).rejects.toThrow(/signature/);
   });
 
   it('proveAgentCannotEdit rejects the agent forgery', async () => {
     const src = createLocalMandateSource({ signerPk: PK });
     await src.createForCar('t2', OWNER);
-    const p = await src.proveAgentCannotEdit!('t2.crumple.eth');
+    const p = await src.proveAgentCannotEdit!('t2.naap.eth');
     expect(p.rejected).toBe(true);
     expect(p.detail).toMatch(/offline/);
     expect(p.detail).toContain(agentAccountFor('t2').address.slice(0, 6));
@@ -56,7 +56,7 @@ describe('local mandate source', () => {
     w.onConfirmed(() => (fired = true));
     w.enqueue('c1', '', { stars: 3, bare: { stars: 1, lossUsd: 10, crashes: 1 }, airbag: { stars: 3, lossUsd: 0, crashes: 0 } });
     await new Promise((r) => setTimeout(r, 20));
-    expect(w.written[0].ensName).toBe('c1.crumple.eth');
+    expect(w.written[0].ensName).toBe('c1.naap.eth');
     expect(fired).toBe(false);
   });
 });

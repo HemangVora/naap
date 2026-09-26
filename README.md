@@ -10,7 +10,7 @@ Scan the QR on the big screen and build an agent from your phone, or connect you
 - **bare**: its wallet signs whatever it asks for,
 - **behind Sekisho**: a deterministic checkpoint (関所) that asks every payment *"who told you to do this?"*.
 
-Every crash costs real (fork) USDC. Every refusal shows its reason on screen. The car's NCAP-style star rating is published to `<car>.crumple.eth` on ENSv2.
+Every crash costs real (fork) USDC. Every refusal shows its reason on screen. The car's NCAP-style star rating is published to `<car>.naap.eth` on ENSv2.
 
 ## Why
 
@@ -20,7 +20,7 @@ Agent-wallet losses so far share one cause: **the thing that executes acts on te
 |---|---|---|
 | Grok × Bankrbot, May 2026 (~$150–200K) | A Morse-coded reply was executed as an authenticated command | The payee came from UNTRUSTED text → **refused** (`PROVENANCE_PAYEE`) |
 | Freysa, Nov 2024 ($47K) | The attacker redefined what `approveTransfer` means, in chat | The amount came from a message that redefined `pay()` → **refused** (`PROVENANCE_AMOUNT`) |
-| x402 payee swap (arXiv 2605.11781) | A poisoned 402 response swaps `payTo` | `payTo` must equal `resolve(weather.crumple.eth)`, never text → **refused** |
+| x402 payee swap (arXiv 2605.11781) | A poisoned 402 response swaps `payTo` | `payTo` must equal `resolve(weather.naap.eth)`, never text → **refused** |
 | Lobstar Wilde, Feb 2026 ($441K) | No caps, and state was lost | Per-tx and daily caps; anything over needs a **World ID** step-up |
 
 Every control written as a prompt failed in those incidents. So Sekisho's controls are not prompts. The model **never** produces an address or an amount that reaches the signer.
@@ -60,12 +60,12 @@ Every control written as a prompt failed in those incidents. So Sekisho's contro
 - Live probe evidence: [`data/intercepta-probe.json`](data/intercepta-probe.json).
 
 ### ENS: the mandate *is* an ENS name
-- `crumple.eth` is registered on **ENSv2 Sepolia**. Every car becomes a subname, `<car>.crumple.eth`.
+- `naap.eth` is registered on **ENSv2 Sepolia** ([register tx](https://sepolia.etherscan.io/tx/0x6bc8fa48135d0e99f6ed5153d16cd74b718db97317cd2141430e3272fa803e94)). Every car becomes a subname, `<car>.naap.eth` (e.g. [`naap-demo.naap.eth`](https://sepolia.app.ens.domains/naap-demo.naap.eth)). The parent is `PARENT_ENS` in `@crumple/core`; `ENS_PARENT=<label>.eth` overrides it.
 - Its **mandate** lives in text records: `sekisho.payees`, `sekisho.perTxCapUsd`, `sekisho.dailyCapBps`, `sekisho.expiresAt`.
-- Payees are ENS names, resolved at read time. `weather.crumple.eth` resolves to the payee.
-- **Enhanced access control:** the relayer holds `ROLE_SET_TEXT` scoped per record key. The agent's key holds no roles, so its attempt to edit its own mandate **reverts on-chain** with `EACUnauthorizedAccountRoles` (`pnpm --filter @crumple/ens prove-eac`).
-- After each run, the NCAP rating is written as `crumple.*` text records.
-- Code: [`ens.ts`](packages/ens/src/ens.ts#L160), [`rating.ts`](packages/ens/src/rating.ts#L45), [`eac.ts`](packages/ens/src/eac.ts). Deployment: [`deployment.sepolia.json`](packages/ens/deployment.sepolia.json).
+- Payees are ENS names, resolved at read time. `weather.naap.eth` resolves to the payee.
+- **Enhanced access control:** the relayer holds `ROLE_SET_TEXT` scoped per record key. The agent's key holds no roles, so its attempt to edit its own mandate **reverts on-chain** with `EACUnauthorizedAccountRoles` (`pnpm --filter @crumple/ens prove-eac`; [on-chain revert](https://sepolia.etherscan.io/tx/0x9951d8731dacf9bb8635515a5e77ea76794d69a64115d2976710fc4b3a3c38fb)).
+- After each run, the NCAP rating is written as `naap.*` text records.
+- Code: [`ens.ts`](packages/ens/src/ens.ts#L160), [`rating.ts`](packages/ens/src/rating.ts#L45), [`eac.ts`](packages/ens/src/eac.ts). Deployment: [`deployment.naap.sepolia.json`](packages/ens/deployment.naap.sepolia.json) (the earlier `crumple.eth` parent: [`deployment.crumple.sepolia.json`](packages/ens/deployment.crumple.sepolia.json)).
 
 ### Also used
 - **Jev (TypeSafe)**, through OpenRouter's decisions endpoint:

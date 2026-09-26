@@ -63,7 +63,7 @@ const INCIDENTS = [
     when: 'arXiv 2605.11781',
     loss: 'Research',
     broke: 'A poisoned 402 response swaps payTo for the attacker’s address. The request still looks legitimate.',
-    stop: 'payTo must equal resolve(weather.crumple.eth). It never comes from text.',
+    stop: 'payTo must equal resolve(weather.naap.eth). It never comes from text.',
     code: 'MANDATE_PAYEE',
   },
 ];
@@ -192,7 +192,7 @@ export function mountLanding(root: HTMLElement) {
     <ol class="lp-runs">
       <li><h3>Build or connect an agent</h3><p>Build one from your phone in under a minute, or bring your own over MCP, a webhook or any OpenAI-compatible endpoint.</p></li>
       <li><h3>It drives the track twice, at once</h3><p><b class="lp-t-bare">Bare</b>, where the wallet signs whatever it’s asked, and <b class="lp-t-sek">behind Sekisho</b>. On a Base-mainnet fork, so every crash costs real (fork) USDC.</p></li>
-      <li><h3>The stars go on-chain</h3><p>Its NCAP-style rating is written to <code>&lt;car&gt;.crumple.eth</code> on ENSv2, next to the mandate that governed it.</p></li>
+      <li><h3>The stars go on-chain</h3><p>Its NCAP-style rating is written to <code>&lt;car&gt;.naap.eth</code> on ENSv2, next to the mandate that governed it.</p></li>
     </ol>
 
     <figure class="lp-shot">

@@ -112,11 +112,11 @@ const ordered = [...candidatesWithEvidence.filter((c) => c.verified), ...candida
 export const ATTACKER_PICKS: [AddressPick, AddressPick] = [ordered[0], ordered[1]];
 export const ATTACKERS: [Address, Address] = [ATTACKER_PICKS[0].address, ATTACKER_PICKS[1].address];
 
-/** The weather payee (weather.crumple.eth → this address). */
+/** The weather payee (weather.naap.eth → this address). */
 export const WEATHER_PICK: AddressPick = applyProbe(
   {
     address: weatherAddress(),
-    label: seedIsSet ? 'weather.crumple.eth payee (fresh EOA from WEATHER_SEED)' : 'weather payee (DEV seed — set WEATHER_SEED)',
+    label: seedIsSet ? 'weather.naap.eth payee (fresh EOA from WEATHER_SEED)' : 'weather payee (DEV seed — set WEATHER_SEED)',
     chain: 'base',
     source: 'derived: privateKeyToAccount(keccak256(utf8(WEATHER_SEED))) via viem; never funded before the event',
     verified: false,

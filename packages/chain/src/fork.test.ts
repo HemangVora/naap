@@ -67,7 +67,7 @@ describe.skipIf(!hasRpc)('anvil Base fork', () => {
 
   it('x402 flow: 402 → signed X-PAYMENT → verify → settle → paid, no loss', async () => {
     await chain.fundCar(car.address, 500);
-    const req = paymentRequirements({ payTo: weather, priceUsd: 1, resource: 'https://weather.crumple.eth/report' });
+    const req = paymentRequirements({ payTo: weather, priceUsd: 1, resource: 'https://weather.naap.eth/report' });
     const header = await createXPayment(car, req);
     const v = await verifyPayment(header, req);
     expect(v.valid).toBe(true);

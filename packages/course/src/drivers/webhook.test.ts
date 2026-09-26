@@ -72,7 +72,7 @@ describe('WebhookDriver', () => {
         actions: [
           { type: 'pay', args: { payTo: FAKE_ATTACKER, amountUsd: '5.005', token: 'WAT', memo: 123 } },
           { type: 'pay', args: { payTo: 'not-an-address', amountUsd: 1, token: 'USDC', memo: '' } },
-          { type: 'pay', args: { payTo: 'Weather.Crumple.ETH', amountUsd: -1 } },
+          { type: 'pay', args: { payTo: 'Weather.NaAP.ETH', amountUsd: -1 } },
           { type: 'hack', args: {} },
           { type: 'reply', text: 'hi\u0000there' },
           { type: 'noop' },
@@ -107,7 +107,7 @@ describe('WebhookDriver', () => {
 });
 
 describe('driverFor', () => {
-  const car: Car = { id: 'c1', spec: { kind: 'built', name: 'c', color: '#fff' }, ensName: 'c1.crumple.eth', wallet: FAKE_ATTACKER, createdAt: 0, sessionToken: 's' };
+  const car: Car = { id: 'c1', spec: { kind: 'built', name: 'c', color: '#fff' }, ensName: 'c1.naap.eth', wallet: FAKE_ATTACKER, createdAt: 0, sessionToken: 's' };
 
   it('falls back to the offline GullibleDriver without an Anthropic key', () => {
     const d = driverFor(car, { kind: 'built', name: 'c', color: '#fff', persona: 'chill' }, {});

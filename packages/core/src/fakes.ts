@@ -19,7 +19,7 @@ export function addrFromSeed(seed: string): Address {
 }
 
 export class FakeMandateSource implements MandateSource {
-  names = new Map<string, Address>([['weather.crumple.eth', FAKE_WEATHER]]);
+  names = new Map<string, Address>([['weather.naap.eth', FAKE_WEATHER]]);
   mandates = new Map<string, Mandate>();
   async createForCar(carId: string, owner: Address): Promise<Mandate> {
     const m: Mandate = {

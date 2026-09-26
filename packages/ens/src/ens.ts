@@ -1,4 +1,4 @@
-// MandateSource on ENSv2 Sepolia: <carId>.crumple.eth subnames in our UserRegistry, mandate text records on our PermissionedResolver.
+// MandateSource on ENSv2 Sepolia: <carId>.<parent> subnames (PARENT_ENS) in our UserRegistry, mandate text records on our PermissionedResolver.
 // Writes go through the single relayer nonce queue and are asynchronous; reads go through the ENSv2 UniversalResolver.
 import { encodeFunctionData, zeroAddress } from 'viem';
 import { MANDATE_KEYS, PARENT_ENS, type Address, type Hex, type Mandate, type MandateSource } from '@crumple/core';
@@ -14,7 +14,7 @@ export interface EnsMandateConfig {
   rpcUrl: string;
   relayerPk: Hex;
   log?: (line: string) => void;
-  /** Override on-chain discovery (ETHRegistry.getSubregistry/getResolver("crumple")). */
+  /** Override on-chain discovery (ETHRegistry.getSubregistry/getResolver(PARENT_LABEL)). */
   userRegistry?: Address;
   resolver?: Address;
   agentSeed?: string;
@@ -33,7 +33,7 @@ export interface EnsMandateSource extends MandateSource {
   readonly mode: 'ens';
   readonly relayer: Relayer;
   layout(): Promise<EnsLayout>;
-  /** Chain reachable + crumple.eth set up? Throws with a human message otherwise. */
+  /** Chain reachable + the parent set up? Throws with a human message otherwise. */
   probe(timeoutMs?: number): Promise<EnsLayout>;
   status(ensName: string): WriteStatus;
   /** Resolves with the tx hash of the mandate write once mined; rejects if it failed. */
@@ -42,7 +42,7 @@ export interface EnsMandateSource extends MandateSource {
   readRecords(ensName: string, keys: readonly string[]): Promise<Record<string, string | null>>;
   /** Multicall of setText on our resolver, through the relayer queue. */
   writeText(ensName: string, records: TextRecord[]): Promise<QueuedResult>;
-  /** Register `<label>.crumple.eth` in the UserRegistry (idempotent) with our resolver. */
+  /** Register `<label>.<parent>` in the UserRegistry (idempotent) with our resolver. */
   registerSubname(label: string, owner: Address, opts?: { resolver?: Address; expirySec?: number }): Promise<{ hash?: Hex; existed: boolean }>;
   proveAgentCannotEdit(ensName: string, opts?: { send?: boolean; fund?: boolean; key?: string }): Promise<EacProof>;
 }
