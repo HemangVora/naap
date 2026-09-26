@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <g stroke-linecap="round" stroke-linejoin="round">
+    <!-- sticker border (reads on dark and light) -->
+    <g transform="rotate(-16 62 70)" stroke="#f2efe8" stroke-width="15" fill="#f2efe8">
+      <path d="M62 24 V11"/><circle cx="62" cy="9" r="6"/><circle cx="62" cy="70" r="46"/>
+    </g>
+    <g transform="rotate(-16 62 70)">
+      <path d="M62 24 V11" stroke="#0d0e11" stroke-width="6"/>
+      <circle cx="62" cy="9" r="6" fill="#e2412b" stroke="#0d0e11" stroke-width="4"/>
+      <circle cx="62" cy="70" r="46" fill="#f5c400"/>
+      <path d="M62 70 L62 24 A46 46 0 0 1 108 70 Z M62 70 L62 116 A46 46 0 0 1 16 70 Z" fill="#0d0e11"/>
+      <circle cx="62" cy="70" r="46" fill="none" stroke="#0d0e11" stroke-width="7"/>
+      <!-- closed eyes: dark on yellow, yellow on black -->
+      <path d="M31 58 q9 9 19 0" fill="none" stroke="#0d0e11" stroke-width="6.5"/>
+      <path d="M74 58 q9 9 19 0" fill="none" stroke="#f5c400" stroke-width="6.5"/>
+      <!-- snoring mouth, off-centre because the head has slumped -->
+      <ellipse cx="78" cy="89" rx="6" ry="7" fill="#0d0e11"/>
+    </g>
+    <!-- z z Z -->
+    <g fill="none" stroke-width="5">
+      <path d="M96 30 h9 l-9 10 h9" stroke="#f2efe8" stroke-width="11"/><path d="M96 30 h9 l-9 10 h9" stroke="#0d0e11"/>
+      <path d="M108 12 h13 l-13 14 h13" stroke="#f2efe8" stroke-width="11"/><path d="M108 12 h13 l-13 14 h13" stroke="#0d0e11"/>
+    </g>
+    <!-- snot bubble: the universal "asleep" cue, survives 16 px -->
+    <circle cx="101" cy="98" r="15" fill="#f2efe8" stroke="#f2efe8" stroke-width="9"/>
+    <circle cx="101" cy="98" r="15" fill="#bfe1ff" stroke="#0d0e11" stroke-width="5"/>
+    <path d="M94 91 q3 -3 7 -3" fill="none" stroke="#ffffff" stroke-width="3.5"/>
+  </g>
+</svg>

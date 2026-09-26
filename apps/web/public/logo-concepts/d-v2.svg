@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <g stroke-linecap="round" stroke-linejoin="round">
+    <!-- steering wheel (lower arc + hub) -->
+    <path d="M10 118 A56 56 0 0 1 118 118" fill="none" stroke="#f2efe8" stroke-width="22"/>
+    <path d="M10 118 A56 56 0 0 1 118 118" fill="none" stroke="#0d0e11" stroke-width="15"/>
+    <path d="M10 118 A56 56 0 0 1 118 118" fill="none" stroke="#2a2c31" stroke-width="8"/>
+    <!-- airbag puff = the pillow (Sekisho) -->
+    <path d="M22 98 C14 80 30 66 44 72 C48 58 70 56 78 68 C92 60 110 72 104 88 C114 96 104 112 90 106 C80 116 50 116 40 108 C26 112 16 104 22 98 Z" fill="#f2efe8" stroke="#0d0e11" stroke-width="6"/>
+    <path d="M52 96 q12 6 26 0" fill="none" stroke="#c9c6bd" stroke-width="4"/>
+    <!-- vermilion hub peeking under the bag -->
+    <circle cx="64" cy="118" r="9" fill="#e2412b" stroke="#0d0e11" stroke-width="5"/>
+    <!-- dozing roundel head on the pillow -->
+    <g transform="rotate(-24 58 60)">
+      <path d="M58 30 V21" stroke="#f2efe8" stroke-width="11"/><circle cx="58" cy="19" r="5" fill="#f2efe8" stroke="#f2efe8" stroke-width="9"/><circle cx="58" cy="58" r="28" fill="#f2efe8" stroke="#f2efe8" stroke-width="9"/>
+      <path d="M58 30 V21" stroke="#0d0e11" stroke-width="5"/>
+      <circle cx="58" cy="19" r="5" fill="#e2412b" stroke="#0d0e11" stroke-width="3.5"/>
+      <circle cx="58" cy="58" r="28" fill="#f5c400"/>
+      <path d="M58 58 L58 30 A28 28 0 0 1 86 58 Z M58 58 L58 86 A28 28 0 0 1 30 58 Z" fill="#0d0e11"/>
+      <circle cx="58" cy="58" r="28" fill="none" stroke="#0d0e11" stroke-width="5.5"/>
+      <path d="M39 51 q6 6 12 0" fill="none" stroke="#0d0e11" stroke-width="4.5"/>
+      <path d="M65 51 q6 6 12 0" fill="none" stroke="#f5c400" stroke-width="4.5"/>
+      <ellipse cx="68" cy="70" rx="4" ry="5" fill="#0d0e11"/>
+    </g>
+    <g fill="none" stroke-width="4.5">
+      <path d="M92 26 h8 l-8 9 h8" stroke="#f2efe8" stroke-width="10"/><path d="M92 26 h8 l-8 9 h8" stroke="#0d0e11"/>
+      <path d="M104 10 h12 l-12 13 h12" stroke="#f2efe8" stroke-width="10"/><path d="M104 10 h12 l-12 13 h12" stroke="#0d0e11"/>
+    </g>
+    <circle cx="86" cy="72" r="10" fill="#bfe1ff" stroke="#0d0e11" stroke-width="4"/>
+    <path d="M81 68 q2 -2 5 -2" fill="none" stroke="#ffffff" stroke-width="2.5"/>
+  </g>
+</svg>

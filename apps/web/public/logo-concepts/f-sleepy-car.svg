@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <g stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 104 V70 Q18 56 30 52 L40 30 Q43 24 50 24 H78 Q85 24 88 30 L98 52 Q110 56 110 70 V104 Z" fill="#f2efe8" stroke="#f2efe8" stroke-width="14"/>
+    <path d="M18 104 V70 Q18 56 30 52 L40 30 Q43 24 50 24 H78 Q85 24 88 30 L98 52 Q110 56 110 70 V104 Z" fill="#f5c400" stroke="#0d0e11" stroke-width="6"/>
+    <path d="M36 52 L45 33 H83 L92 52 Z" fill="#2a2c31" stroke="#0d0e11" stroke-width="5"/>
+    <!-- sleepy headlights: half-closed lids -->
+    <circle cx="36" cy="72" r="11" fill="#f2efe8" stroke="#0d0e11" stroke-width="5"/>
+    <circle cx="92" cy="72" r="11" fill="#f2efe8" stroke="#0d0e11" stroke-width="5"/>
+    <path d="M25 72 A11 11 0 0 1 47 72 Z M81 72 A11 11 0 0 1 103 72 Z" fill="#0d0e11"/>
+    <path d="M27 74 q9 5 18 0 M83 74 q9 5 18 0" fill="none" stroke="#0d0e11" stroke-width="3.5"/>
+    <!-- snoring grille -->
+    <ellipse cx="64" cy="84" rx="9" ry="7" fill="#0d0e11"/>
+    <!-- bumper with hazard stripes, crumpled on one side -->
+    <path d="M14 98 H114 V110 H14 Z" fill="#0d0e11"/>
+    <path d="M20 98 l8 12 M34 98 l8 12 M48 98 l8 12 M62 98 l8 12 M76 98 l8 12" stroke="#f5c400" stroke-width="5"/>
+    <path d="M92 98 l6 5 -4 3 8 4" fill="none" stroke="#e2412b" stroke-width="3.5"/>
+    <path d="M24 110 V118 M104 110 V118" stroke="#0d0e11" stroke-width="10"/>
+    <g fill="none" stroke-width="4.5">
+      <path d="M96 8 h9 l-9 10 h9" stroke="#f2efe8" stroke-width="10"/><path d="M96 8 h9 l-9 10 h9" stroke="#0d0e11"/>
+      <path d="M110 -2 h9 l-9 10 h9" stroke="#f2efe8" stroke-width="10" transform="translate(0 6)"/><path d="M110 -2 h9 l-9 10 h9" stroke="#0d0e11" transform="translate(0 6)"/>
+    </g>
+  </g>
+</svg>
