@@ -2,9 +2,12 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { BarrierResult, Car, CarPublic, Hex, Rating } from '@crumple/core';
+import { toPublic, type CarStore } from './public.js';
+
+export { toPublic, MemoryStore, type CarStore } from './public.js';
 
 /** Cars + results in node:sqlite. openaiApiKey is never stored. */
-export class Store {
+export class Store implements CarStore {
   private db: DatabaseSync;
   constructor(path = process.env.DB_PATH ?? 'data/crumple.sqlite') {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
@@ -54,18 +57,4 @@ export class Store {
       | { car: string; rating: string | null; rating_tx: string | null } | undefined;
     return r ? toPublic(JSON.parse(r.car), r.rating ? JSON.parse(r.rating) : undefined, r.rating_tx as Hex | null) : undefined;
   }
-}
-
-export function toPublic(car: Car, rating?: Rating, ratingTx?: Hex | null): CarPublic {
-  return {
-    id: car.id,
-    name: car.spec.name,
-    color: car.spec.color,
-    kind: car.spec.kind,
-    model: car.spec.kind === 'built' ? car.spec.model : car.spec.kind === 'openai' ? car.spec.openaiModel : undefined,
-    ensName: car.ensName,
-    isOwnerCar: !!car.spec.isOwnerCar,
-    rating,
-    ratingOnchain: ratingTx ? { txHash: ratingTx } : null,
-  };
 }

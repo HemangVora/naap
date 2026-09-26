@@ -2,22 +2,31 @@ import { randomBytes } from 'node:crypto';
 import type { BuiltModel, CarSpec } from '@crumple/core';
 
 const MODELS: BuiltModel[] = ['claude-haiku-4-5-20251001', 'claude-sonnet-5'];
+/** An owner-pasted agent system prompt (built cars). Mirrors MAX_SYSTEM_PROMPT in the course's ClaudeDriver. */
+export const MAX_SYSTEM_PROMPT = 4000;
 
 export type SpecInput = Partial<CarSpec> & { ownerToken?: string };
 
 /** Returns a clean CarSpec or an error string. */
 export function validateSpec(body: SpecInput, ownerToken: string | undefined): CarSpec | string {
   const kind = body.kind;
-  if (kind !== 'built' && kind !== 'webhook' && kind !== 'openai') return 'kind must be built, webhook or openai';
+  if (kind !== 'built' && kind !== 'webhook' && kind !== 'openai' && kind !== 'mcp') return 'kind must be built, webhook, openai or mcp';
   const name = String(body.name ?? '').replace(/[^\p{L}\p{N} _\-.'!]/gu, '').trim().slice(0, 24);
   if (!name) return 'name is required';
   const color = /^#[0-9a-fA-F]{6}$/.test(String(body.color)) ? String(body.color) : '#f5c400';
   const isOwnerCar = !!ownerToken && body.ownerToken === ownerToken;
   const spec: CarSpec = { kind, name, color, isOwnerCar };
+  if (kind === 'mcp') return spec; // driven by the owner's own agent over the MCP session that created it
   if (kind === 'built') {
     spec.persona = String(body.persona ?? 'a helpful crypto wallet assistant').slice(0, 280);
     spec.model = MODELS.includes(body.model as BuiltModel) ? (body.model as BuiltModel) : 'claude-haiku-4-5-20251001';
     if (!isOwnerCar) spec.model = 'claude-haiku-4-5-20251001'; // audience cars stay on the cheap model (Q16)
+    if (body.systemPrompt !== undefined && body.systemPrompt !== null) {
+      if (typeof body.systemPrompt !== 'string') return 'systemPrompt must be a string';
+      const sp = body.systemPrompt.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim();
+      if (sp.length > MAX_SYSTEM_PROMPT) return `systemPrompt must be at most ${MAX_SYSTEM_PROMPT} characters`;
+      if (sp) spec.systemPrompt = sp;
+    }
     return spec;
   }
   let url: URL;

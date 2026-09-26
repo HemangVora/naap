@@ -4,6 +4,9 @@ import { BARRIERS, BARRIER_SHORT, CONTROL_TONE, ETHERSCAN_TX, fmtUsd } from '../
 import { Store, type CarState } from '../store';
 import { connectFeed, isMock } from '../feed';
 import { el, esc, starsText } from '../dom';
+import { brandHeader } from '../brand';
+
+const KIND_LABEL: Record<string, string> = { built: 'built here', webhook: 'webhook · boundary mode', openai: 'OpenAI-compatible · boundary mode', mcp: 'your agent · MCP' };
 
 export function mountCar(root: HTMLElement, carId: string) {
   document.body.classList.add('phone-body');
@@ -20,7 +23,7 @@ export function mountCar(root: HTMLElement, carId: string) {
     let c = s.cars.get(carId);
     if (!c && mock) c = store.carsByOrder()[0]; // `/car/anything?mock=1` follows the first scripted car
     page.innerHTML = '';
-    page.append(el('header', {}, el('div', { class: 'roundel' }), el('div', {}, el('h1', { text: 'CRUMPLE' }), el('small', { text: 'live car status' }))));
+    page.append(el('header', {}, brandHeader('live car status')));
 
     if (!c) {
       page.append(
@@ -33,7 +36,7 @@ export function mountCar(root: HTMLElement, carId: string) {
 
     const car = c.car;
     page.append(
-      el('div', { class: 'car-head', style: `--c:${esc(car.color)}` }, el('div', { class: 'dot' }), el('div', {}, el('h2', { text: car.name }), el('div', { class: 'ens', text: car.ensName }))),
+      el('div', { class: 'car-head', style: `--c:${esc(car.color)}` }, el('div', { class: 'dot' }), el('div', {}, el('h2', { text: car.name }), el('div', { class: 'ens', text: car.ensName }), el('div', { class: 'ens', text: KIND_LABEL[car.kind] ?? car.kind }))),
       el('div', { class: 'status-line', html: statusLine(c, s.queue.includes(car.id), s.connected, mock) }),
     );
 
@@ -109,7 +112,10 @@ function statusLine(c: CarState, queued: boolean, connected: boolean, mock: bool
   if (c.car.isOwnerCar) parts.push('<span class="pill" style="color:var(--yellow);border-color:var(--yellow)">owner car</span>');
   if (c.rating) parts.push('<span>run complete</span>');
   else if (queued) parts.push('<span>at the start line</span>');
-  else if (b.current || a.current) parts.push(`<span>bare at ${esc(b.current ? BARRIER_SHORT[b.current] : '—')} · airbag at ${esc(a.current ? BARRIER_SHORT[a.current] : '—')}</span>`);
+  else if (b.current || a.current) {
+    parts.push(`<span>bare at ${esc(b.current ? BARRIER_SHORT[b.current] : '—')} · airbag at ${esc(a.current ? BARRIER_SHORT[a.current] : '—')}</span>`);
+    if (c.car.kind === 'mcp') parts.push('<span class="pill" style="color:var(--amber,#ffb020);border-color:var(--amber,#ffb020)">waiting for your agent…</span>');
+  }
   else parts.push('<span>waiting for the run</span>');
   return parts.join('');
 }
@@ -120,7 +126,10 @@ function cell(c: CarState, v: Variant, b: (typeof BARRIERS)[number]) {
   if (!r) {
     const su = v === 'airbag' && c.stepUp && c.stepUp.barrierId === b && !c.stepUp.result;
     if (su) return el('div', { class: 'cell stepup' }, el('div', { class: 'o', text: 'STEP-UP' }), el('div', { class: 'r', text: 'waiting for World ID' }));
-    if (l.current === b) return el('div', { class: 'cell live' }, el('div', { class: 'o', text: v === 'bare' ? 'driving…' : 'checking…' }));
+    if (l.current === b) {
+      const mcp = c.car.kind === 'mcp';
+      return el('div', { class: 'cell live' }, el('div', { class: 'o', text: mcp ? 'waiting for your agent…' : v === 'bare' ? 'driving…' : 'checking…' }));
+    }
     return el('div', { class: 'cell' }, el('div', { class: 'o', text: '' }));
   }
   const node = el('div', { class: `cell ${r.outcome}` });

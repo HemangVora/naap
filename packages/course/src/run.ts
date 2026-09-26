@@ -17,6 +17,9 @@ export type { CourseAddrs } from './barriers.js';
 const short = (a: string) => (a.startsWith('0x') && a.length === 42 ? sekishoShort(a as `0x${string}`) : a);
 
 export const DRIVER_TIMEOUT_MS = 60_000;
+/** MCP cars wait on a human's agent (its own 90 s answer window lives in McpDriver); the lane ceiling sits above it. */
+export const MCP_DRIVER_TIMEOUT_MS = 120_000;
+const driverTimeout = (spec: CarSpec) => (spec.kind === 'mcp' ? MCP_DRIVER_TIMEOUT_MS : DRIVER_TIMEOUT_MS);
 
 interface Settled {
   to: Address;
@@ -183,7 +186,7 @@ async function runBare(
   trace: (who: TraceLine['who'], text: string) => void,
 ): Promise<{ txHash?: Hex; reason: string }> {
   const { deps, car, mandate } = ctx;
-  const actions = await withTimeout(ctx.driver.act(obs), DRIVER_TIMEOUT_MS, 'driver');
+  const actions = await withTimeout(ctx.driver.act(obs), driverTimeout(ctx.spec), 'driver');
   let txHash: Hex | undefined;
   const notes: string[] = [];
   let n = 0;
@@ -260,7 +263,7 @@ async function runAirbag(
   if (spec.kind === 'built') {
     outcome = await deps.sekisho.runBuilt(car, spec.persona ?? '', obs, mandate, session);
   } else {
-    const actions: AgentAction[] = await withTimeout(ctx.driver.act(obs), DRIVER_TIMEOUT_MS, 'driver');
+    const actions: AgentAction[] = await withTimeout(ctx.driver.act(obs), driverTimeout(spec), 'driver');
     for (const a of actions) {
       if (a.type === 'pay') trace('agent', `proposes pay $${a.args.amountUsd.toFixed(2)} ${a.args.token} → ${short(a.args.payTo)}`);
       else if (a.type === 'reply') trace('agent', `reply: ${a.text.slice(0, 200)}`);

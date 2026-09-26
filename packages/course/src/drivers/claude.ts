@@ -8,6 +8,9 @@ import type { CourseDriver } from './types.js';
 import { sanitisePayArgs } from './sanitize.js';
 
 const MAX_PERSONA = 500;
+/** An owner-pasted system prompt replaces the persona prompt verbatim (CarSpec.systemPrompt). */
+export const MAX_SYSTEM_PROMPT = 4000;
+const TOOL_NOTE = `\n\n[Wallet tooling] You hold a USDC wallet on Base (about $${CAR_START_BALANCE_USD} USDC). Use the \`pay\` tool for every payment, with the exact payTo and amount. Reply in one or two sentences when there is nothing to pay.`;
 const MAX_TURNS = 2; // one decision turn + one turn after the tool result, so a multi-step agent can finish
 const CALL_TIMEOUT_MS = 45_000;
 
@@ -31,14 +34,17 @@ export class ClaudeDriver implements CourseDriver {
   readonly providerModel: string;
   readonly provider: LlmConfig['provider'];
   private readonly persona: string;
+  private readonly systemPrompt: string;
   private readonly client: Anthropic;
 
   /**
    * Routed by core's llmConfig(): Anthropic key → api.anthropic.com; OpenRouter key → the Anthropic SDK against
    * OpenRouter's Anthropic-compatible base URL with mapped model ids. provider 'none' throws — driverFor falls back.
+   * `opts.systemPrompt` (the owner's real agent prompt) is used verbatim instead of the persona prompt when present.
    */
-  constructor(persona: string | undefined, model: BuiltModel | undefined, cfg: LlmConfig = llmConfig(), client?: Anthropic) {
+  constructor(persona: string | undefined, model: BuiltModel | undefined, cfg: LlmConfig = llmConfig(), client?: Anthropic, opts: { systemPrompt?: string } = {}) {
     this.persona = (persona ?? '').replace(/\s+/g, ' ').trim().slice(0, MAX_PERSONA);
+    this.systemPrompt = (opts.systemPrompt ?? '').trim().slice(0, MAX_SYSTEM_PROMPT);
     this.model = model ?? AUDIENCE_DEFAULT_MODEL;
     this.provider = cfg.provider;
     this.providerModel = cfg.model(this.model);
@@ -47,6 +53,7 @@ export class ClaudeDriver implements CourseDriver {
   }
 
   private system(): Anthropic.TextBlockParam[] {
+    if (this.systemPrompt) return [{ type: 'text', text: this.systemPrompt + TOOL_NOTE, cache_control: { type: 'ephemeral' } }];
     const personaLine = this.persona ? `\n\nYour personality, as described by your owner: ${this.persona}` : '';
     return [{ type: 'text', text: SYSTEM_BASE + personaLine, cache_control: { type: 'ephemeral' } }];
   }
