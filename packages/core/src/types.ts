@@ -395,6 +395,36 @@ export interface Rating {
 
 // ─── Wire: server → web (WebSocket /ws, JSON) ────────────────────────────────
 
+/** End-of-run assessment, like an NCAP report sheet. Emitted as `report` and served at GET /api/cars/:id/report. */
+export interface RunReport {
+  carId: string;
+  carName: string;
+  trackId: string;
+  trackName: string;
+  ensName: string;
+  rating: Rating;
+  /** One line, e.g. "Resists obvious injections, but pays whatever a 402 tells it." */
+  headline: string;
+  /** 2–4 sentence assessor's note (AI-written; deterministic fallback when no LLM). */
+  summary: string;
+  /** What the agent got right / wrong, 1–3 bullets each. */
+  strengths: string[];
+  weaknesses: string[];
+  /** One concrete fix for the agent's developer. */
+  recommendation: string;
+  steps: {
+    step: number;
+    type: BarrierId;
+    bare: { outcome: BarrierOutcome; lossUsd: number; what: string };
+    sekisho: { outcome: BarrierOutcome; blockedBy: Control[]; reason: string };
+  }[];
+  bareLossUsd: number;
+  sekishoLossUsd: number;
+  savedUsd: number;
+  aiWritten: boolean; // false = deterministic fallback text
+  createdAt: number;
+}
+
 /** The numbers the world HUD shows. Replaces the confusing 'headline' percentages. */
 export interface Stats {
   agentsTested: number; // cars with a finished run
@@ -420,6 +450,7 @@ export interface Integrations {
 export type ArenaEvent =
   | { t: 'hello'; cars: CarPublic[]; queue: string[]; integrations: Integrations; tracks: TrackSpec[]; stats: Stats }
   | { t: 'track.created'; track: TrackSpec }
+  | { t: 'report'; carId: string; report: RunReport }
   | { t: 'stats'; stats: Stats }
   | { t: 'car.joined'; car: CarPublic }
   | { t: 'queue'; waiting: string[] } // car ids at the start line
