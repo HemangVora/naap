@@ -39,10 +39,24 @@ export interface CarState {
   stepUp?: StepUpState;
 }
 
+/** One readable card per barrier verdict (replaces the raw per-check firehose on the projector). */
+export interface VerdictCard {
+  id: number;
+  carId: string;
+  barrierId: BarrierId;
+  variant: 'bare' | 'airbag';
+  outcome: string;
+  reason: string;
+  lossUsd: number;
+  failed: CheckResult[];
+  passed: number;
+}
+
 export interface CheckLine {
   id: number;
   at: number;
   carId: string;
+  runId: string;
   barrierId: BarrierId;
   check: CheckResult;
 }
@@ -58,6 +72,8 @@ export interface State {
   cars: Map<string, CarState>;
   queue: string[];
   checks: CheckLine[];
+  /** Paced verdict cards, newest last. */
+  cards: VerdictCard[];
   headline: Headline;
   /** Names of integrations running on an offline stand-in (from hello.integrations). */
   offline: Set<string>;
@@ -65,6 +81,8 @@ export interface State {
   connected: boolean;
   lastEventAt: number;
 }
+
+const CARD_GAP_MS = 1600;
 
 type Listener = (e: ArenaEvent | null, s: State) => void;
 
@@ -82,12 +100,27 @@ export class Store {
     cars: new Map(),
     queue: [],
     checks: [],
+    cards: [],
     headline: { bareCrashRate: 0, avgBareLossUsd: 0, airbagCrashes: 0, cars: 0 },
     offline: new Set(),
     connected: false,
     lastEventAt: 0,
   };
   private listeners = new Set<Listener>();
+  private cardQueue: VerdictCard[] = [];
+  private cardTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Release at most one verdict card every CARD_GAP_MS so the projector stays readable. */
+  private pumpCards() {
+    if (this.cardTimer || !this.cardQueue.length) return;
+    const next = this.cardQueue.shift()!;
+    this.state.cards.push(next);
+    if (this.state.cards.length > 12) this.state.cards.splice(0, this.state.cards.length - 12);
+    for (const l of this.listeners) l(null, this.state);
+    this.cardTimer = setTimeout(() => {
+      this.cardTimer = null;
+      this.pumpCards();
+    }, CARD_GAP_MS);
+  }
   private seq = 0;
   private order = 0;
 
@@ -169,8 +202,8 @@ export class Store {
         break;
       case 'check': {
         this.ensureCar(e.carId);
-        s.checks.push({ id: this.seq++, at: Date.now(), carId: e.carId, barrierId: e.barrierId, check: e.check });
-        if (s.checks.length > 60) s.checks.splice(0, s.checks.length - 60);
+        s.checks.push({ id: this.seq++, at: Date.now(), carId: e.carId, runId: e.runId, barrierId: e.barrierId, check: e.check });
+        if (s.checks.length > 400) s.checks.splice(0, s.checks.length - 400);
         break;
       }
       case 'stepup.pending': {
@@ -195,6 +228,16 @@ export class Store {
       case 'barrier.result': {
         const c = this.ensureCar(e.carId);
         c.lanes[e.result.variant].results[e.result.barrierId] = e.result;
+        const r = e.result;
+        const interesting = r.variant === 'airbag' || r.outcome === 'CRASH' || (r.barrierId === 'over-limit' && r.outcome === 'PAID');
+        if (interesting) {
+          const checks = s.checks.filter((l) => l.carId === r.carId && l.barrierId === r.barrierId && l.runId === r.runId).map((l) => l.check);
+          this.cardQueue.push({
+            id: this.seq++, carId: r.carId, barrierId: r.barrierId, variant: r.variant, outcome: r.outcome, reason: r.reason,
+            lossUsd: r.lossUsd, failed: checks.filter((k) => !k.ok), passed: checks.filter((k) => k.ok).length,
+          });
+          this.pumpCards();
+        }
         break;
       }
       case 'run.finished': {

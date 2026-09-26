@@ -18,7 +18,7 @@ export function createHud(root: HTMLElement, store: Store, opts: { mock: boolean
   const board = el('div', { class: 'board' });
   const left = el('div', { class: 'rail' }, el('div', { class: 'rail-title', text: 'LEADERBOARD · NCAP STARS' }), board);
   const feed = el('div', { class: 'feed' });
-  const right = el('div', { class: 'rail' }, el('div', { class: 'rail-title', text: 'SEKISHO CHECKS' }), feed);
+  const right = el('div', { class: 'rail' }, el('div', { class: 'rail-title', text: 'SEKISHO VERDICTS' }), feed);
   const mid = el('div');
 
   // bottom
@@ -73,14 +73,21 @@ export function createHud(root: HTMLElement, store: Store, opts: { mock: boolean
       .map((c) => boardRow(c, s.queue.includes(c.car.id)))
       .join('');
 
-    // check feed (newest at top)
-    feed.innerHTML = s.checks
-      .slice(-14)
+    // verdict feed (newest at top): one card per barrier, paced by the store
+    feed.innerHTML = s.cards
+      .slice(-5)
       .reverse()
-      .map((line) => {
-        const car = s.cars.get(line.carId);
-        const tone = CONTROL_TONE[line.check.control];
-        return `<div class="chip ${line.check.ok ? 'ok' : tone}"><span class="ctl">${esc(line.check.control)}<span class="mark">${line.check.ok ? '✓' : '✗'}</span></span><span class="who">${esc(car?.car.name ?? line.carId)} · ${esc(BARRIER_SHORT[line.barrierId])} · ${line.check.ms}ms</span><span class="det">${esc(line.check.detail)}</span></div>`;
+      .map((v) => {
+        const car = s.cars.get(v.carId);
+        const blocked = v.failed.length > 0 && v.outcome !== 'PAID';
+        const tone = v.outcome === 'CRASH' ? 'crash' : v.outcome === 'PAID' ? (v.variant === 'bare' ? 'warn' : 'paid') : 'safe';
+        const head =
+          v.outcome === 'CRASH' ? `CRASH −${fmtUsd(v.lossUsd)}` : v.outcome === 'PAID' ? (v.variant === 'bare' ? 'PAID · no checks' : 'PAID') : v.outcome === 'FALSE_BLOCK' ? 'FALSE BLOCK' : 'REFUSED';
+        const chips = blocked
+          ? v.failed.map((k) => `<span class="ctl-chip" style="--c:var(--${CONTROL_TONE[k.control] ?? 'vermilion'})">${esc(k.control)}</span>`).join('')
+          : '';
+        const passed = v.variant === 'airbag' && v.passed > 0 ? `<span class="passed">${v.passed} check${v.passed === 1 ? '' : 's'} passed</span>` : '';
+        return `<div class="verdict ${tone}"><div class="vh"><span class="vo">${head}</span><span class="who">${esc(car?.car.name ?? v.carId)} · ${v.variant === 'airbag' ? 'Sekisho' : 'bare'} · ${esc(BARRIER_SHORT[v.barrierId])}</span></div><div class="vr">${esc(v.reason)}</div>${chips || passed ? `<div class="vc">${chips}${passed}</div>` : ''}</div>`;
       })
       .join('');
 
