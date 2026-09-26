@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="NaAP — a crash-test agent asleep at the wheel">
+  <!-- Zzz -->
+  <g fill="#f2efe8" stroke="#0d0e11" stroke-width="2.5" paint-order="stroke" font-family="'Barlow Condensed', Arial Narrow, sans-serif" font-weight="800">
+    <text x="84" y="30" font-size="18">z</text>
+    <text x="95" y="19" font-size="23">Z</text>
+    <text x="108" y="10" font-size="14">z</text>
+  </g>
+  <!-- antenna, drooping -->
+  <path d="M60 30 Q58 18 70 14" fill="none" stroke="#0d0e11" stroke-width="7" stroke-linecap="round"/>
+  <path d="M60 30 Q58 18 70 14" fill="none" stroke="#9a9890" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="72" cy="13" r="5" fill="#e2412b" stroke="#0d0e11" stroke-width="3"/>
+  <!-- head: a crash-test dummy-yellow agent, tilted onto the wheel -->
+  <g transform="rotate(-12 60 62)">
+    <rect x="26" y="30" width="68" height="56" rx="16" fill="#f5c400" stroke="#0d0e11" stroke-width="5"/>
+    <!-- crash-test roundel on the temple -->
+    <g transform="translate(40 46)">
+      <circle r="9" fill="#f2efe8" stroke="#0d0e11" stroke-width="3"/>
+      <path d="M0 -9 A9 9 0 0 1 9 0 L0 0Z M0 9 A9 9 0 0 1 -9 0 L0 0Z" fill="#0d0e11"/>
+    </g>
+    <!-- sleeping eyes -->
+    <path d="M56 58 q6 6 12 0" fill="none" stroke="#0d0e11" stroke-width="4.5" stroke-linecap="round"/>
+    <path d="M74 58 q6 6 12 0" fill="none" stroke="#0d0e11" stroke-width="4.5" stroke-linecap="round"/>
+    <!-- open snoring mouth + drool -->
+    <ellipse cx="72" cy="73" rx="5" ry="3.5" fill="#0d0e11"/>
+    <path d="M76 75 q3 6 0 9 q-3 -3 0 -9z" fill="#6fb3ff" stroke="#0d0e11" stroke-width="1.5"/>
+  </g>
+  <!-- steering wheel it's asleep on -->
+  <g stroke="#0d0e11" stroke-width="6" fill="none" stroke-linecap="round">
+    <path d="M16 112 Q64 80 112 112" stroke="#2a2c31" stroke-width="12"/>
+    <path d="M16 112 Q64 80 112 112" stroke="#e2412b" stroke-width="5"/>
+  </g>
+  <circle cx="64" cy="104" r="7" fill="#2a2c31" stroke="#0d0e11" stroke-width="3"/>
+</svg>
