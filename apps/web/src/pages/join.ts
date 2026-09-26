@@ -180,7 +180,7 @@ export function mountJoin(root: HTMLElement) {
         await new Promise((r) => setTimeout(r, 600));
         carId = 'tanuki';
       } else {
-        const url = ownerToken ? `/api/cars?owner=${encodeURIComponent(ownerToken)}` : '/api/cars';
+        const url = '/api/cars';
         const res = await fetch(url, {
           method: 'POST',
           headers: { 'content-type': 'application/json', ...(ownerToken ? { 'x-owner-token': ownerToken } : {}) },

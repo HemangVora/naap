@@ -74,7 +74,8 @@ export async function buildApp(w: Wiring, store = new Store()) {
 
   app.post('/api/cars', async (req, reply) => {
     const body = { ...((req.body ?? {}) as SpecInput) };
-    body.ownerToken = String(req.headers['x-owner-token'] ?? (req.query as { owner?: string }).owner ?? body.ownerToken ?? '');
+    // Header or body only — never the query string, which ends up in request logs.
+    body.ownerToken = String(req.headers['x-owner-token'] ?? body.ownerToken ?? '');
     const spec = validateSpec(body, process.env.OWNER_TOKEN);
     if (typeof spec !== 'string' && (body as { isOwnerCar?: boolean }).isOwnerCar && !spec.isOwnerCar)
       return reply.code(403).send({ error: 'owner token does not match' });
