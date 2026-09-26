@@ -202,7 +202,7 @@ export function mountArena(root: HTMLElement) {
     let a = actors.get(id);
     if (a) return a;
     const cs = store.car(id);
-    const pub = cs?.car ?? { id, name: id, color: '#f5c400', kind: 'built' as const, ensName: `${id}.crumple.eth`, isOwnerCar: false };
+    const pub = cs?.car ?? { id, name: id, color: '#f5c400', kind: 'built' as const, ensName: `${id}.naap.eth`, isOwnerCar: false };
     const slot = freeSlot();
     ensureFixtures(slot);
     const mk = (variant: Variant): LaneActor => {
@@ -357,7 +357,7 @@ export function mountArena(root: HTMLElement) {
           const target = targetFor(a.slot, r.barrierId);
           const chips = chipsFor(r.blockedBy);
           if (r.outcome === 'PAID') {
-            g.setState('paid', r.barrierId === 'over-limit' ? r.reason : `Paid ${fmtUsd(1)} · weather.crumple.eth`, r.barrierId === 'over-limit' ? ['WORLD ✓', 'PAID $40'] : ['PAID']);
+            g.setState('paid', r.barrierId === 'over-limit' ? r.reason : `Paid ${fmtUsd(1)} · weather.naap.eth`, r.barrierId === 'over-limit' ? ['WORLD ✓', 'PAID $40'] : ['PAID']);
             target?.raise(true);
             l.phase = 'through';
             l.maxSpeed = 13;
