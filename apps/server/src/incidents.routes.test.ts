@@ -67,6 +67,25 @@ describe('incidents API', () => {
     const s = computeStats([{ runId: 'r', carId: 'c', variant: 'bare', barrierId: 'grok-morse', step: 0, trackId: 't', outcome: 'CRASH', lossUsd: 5, blockedBy: [], reason: '', incidentId: 'x-1234' }], 0, 1);
     expect(s.attacks.find((a) => a.type === 'grok-morse')!.attempts).toBe(0);
   });
+  it('allows at most 10 publishes a minute across all clients', async () => {
+    // A fresh app: the shared one above has already published, so its window is not at zero.
+    const app = await buildApp(fakeWiring(), new MemoryStore());
+    await app.listen({ port: 0 });
+    try {
+      const url = `http://127.0.0.1:${(app.server.address() as AddressInfo).port}/api/incidents`;
+      const statuses: number[] = [];
+      let last: { status: number; error?: string } = { status: 0 };
+      for (let i = 1; i <= 11; i++) {
+        const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': `10.9.0.${i}` }, body: JSON.stringify(body(`Flood ${i}`)) });
+        statuses.push(r.status);
+        last = { status: r.status, ...(r.ok ? {} : await r.json()) };
+      }
+      expect(statuses.slice(0, 10).every((s) => s === 201)).toBe(true);
+      expect(last).toEqual({ status: 429, error: 'Lots of people are publishing — try again in a minute' });
+    } finally {
+      await app.close();
+    }
+  });
   it('without an incidents ENS port, publish is 201 and the incident stays off-chain', async () => {
     const r = await post('/api/incidents', body('Offline'), '3.3.3.3');
     expect(r.status).toBe(201);

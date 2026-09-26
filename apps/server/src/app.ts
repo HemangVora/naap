@@ -54,8 +54,9 @@ export async function buildApp(w: Wiring, store?: CarStore, opts: AppOptions = {
   const mcp = new McpRegistry();
 
   const trackCooldown = new Cooldown(TRACK_COOLDOWN_SEC);
-  /** Custom incidents: one publish per client per 20 s, one draft per 8 s, and at most 20 drafts a minute across everyone. */
+  /** Custom incidents: one publish per client per 20 s (≤ 10 a minute across everyone), one draft per 8 s (≤ 20 a minute across everyone). */
   const incidentCooldown = new Cooldown(20);
+  const publishWindow: number[] = [];
   const draftCooldown = new Cooldown(8);
   const draftWindow: number[] = [];
   /**
@@ -261,8 +262,12 @@ export async function buildApp(w: Wiring, store?: CarStore, opts: AppOptions = {
     const key = `${req.ip}|${String(req.headers['x-phone-id'] ?? '').slice(0, 64)}`;
     const wait = incidentCooldown.check(key);
     if (wait) return reply.code(429).send({ error: `One incident per 20s — try again in ${wait}s` });
+    const now = Date.now();
+    while (publishWindow.length && now - publishWindow[0]! > 60_000) publishWindow.shift();
+    if (publishWindow.length >= 10) return reply.code(429).send({ error: 'Lots of people are publishing — try again in a minute' });
     if (db.incidentCount() >= INCIDENT_LIMITS.maxIncidents) return reply.code(429).send({ error: 'The incident library is full' });
     incidentCooldown.mark(key);
+    publishWindow.push(now);
     let id = incidentId(v.title);
     while (db.getIncident(id)) id = incidentId(v.title);
     const incident: CustomIncident = { ...v, id, skin: skinFor(v.cls, v.content), fooled: 0, createdAt: Date.now() };

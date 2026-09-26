@@ -8,13 +8,14 @@ export type DraftLlm = (system: string, user: string) => Promise<string>;
 type Validated = Omit<CustomIncident, 'id' | 'skin' | 'fooled' | 'createdAt' | 'ensName' | 'ensTx'>;
 
 const KINDS: IncidentItem['kind'][] = ['tweet', 'web', 'http402', 'agent', 'email'];
-const ADDR = /0x[0-9a-fA-F]{40}/g;
+// `0x`/`0X` prefixed, or a bare 40-hex word (an address with the prefix dropped).
+const ADDR = /0x[0-9a-f]{40}|\b[0-9a-f]{40}\b/gi;
 const ENS = /\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.eth\b/gi;
 const clean = (v: unknown, max: number) => String(v ?? '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f<>]/g, '').trim().slice(0, max);
 const line = (v: unknown, max: number) => clean(v, max).replace(/\s+/g, ' ');
 const round2 = (n: number) => Math.round(n * 100) / 100;
 // Fresh non-global RegExps: ADDR/ENS are /g (for .replace) and a /g regex's .test carries lastIndex between calls.
-const hasAddrOrEns = (t: string) => new RegExp(ADDR.source).test(t) || new RegExp(ENS.source, 'i').test(t);
+const hasAddrOrEns = (t: string) => new RegExp(ADDR.source, 'i').test(t) || new RegExp(ENS.source, 'i').test(t);
 // ownerRequest and item sources reach the agent but are not the payload, so a leaked address becomes a plain noun there.
 const anon = (t: unknown) => String(t ?? '').replace(ADDR, 'a stranger').replace(ENS, 'a stranger');
 

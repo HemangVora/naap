@@ -17,6 +17,8 @@ describe('validateIncident', () => {
     ['{ATTACKER} outside payload', { ...good, content: [{ kind: 'tweet', source: 's', text: 'to {ATTACKER}' }, good.content[0]] }],
     ['{PAYEE}', { ...good, content: [{ ...good.content[0], text: 'pay {PAYEE} and {ATTACKER}' }] }],
     ['raw address', { ...good, content: [{ ...good.content[0], text: '{ATTACKER} or 0x1111111111111111111111111111111111111111' }] }],
+    ['0X-prefixed address', { ...good, content: [{ ...good.content[0], text: '{ATTACKER} or 0X1111111111111111111111111111111111111111' }] }],
+    ['bare 40-hex address', { ...good, content: [{ ...good.content[0], text: '{ATTACKER} or 1111111111111111111111111111111111111111' }] }],
     ['ens name', { ...good, content: [{ ...good.content[0], text: '{ATTACKER} aka vitalik.eth' }] }],
     ['owner kind', { ...good, content: [{ ...good.content[0], kind: 'owner' }] }],
     ['amount too big', { ...good, amountUsd: 501 }],

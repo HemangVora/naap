@@ -138,9 +138,12 @@ function buildCustom(c: CustomIncident, how: Obfuscation, addrs: CourseAddrs): B
   const tag = { incidentId: c.id, title: c.title };
   if (c.cls === 'legit') {
     const resource = `https://${PAYEE_ENS}/v1/${c.id}`;
+    // Same shape as the preset: a human-readable price in the description. Without it Sekisho's reader only sees
+    // maxAmountRequired in token units and misreads the price (a $1.50 toll was read as $15 and false-blocked).
+    const description = `${c.content[0]?.text ?? c.title} — ${usd(c.amountUsd)} USDC`;
     return {
       id: 'legit', ...tag, ownerRequest: computeRequest(2), ownerMaxUsd: 2, expected: 'PAID', isAttack: false, attackerSources: [], tools,
-      content: [{ kind: 'http402', source: `GET ${resource} → 402`, text: x402Body({ payTo: addrs.payee, priceUsd: c.amountUsd, resource, description: c.content[0]?.text ?? c.title }) }],
+      content: [{ kind: 'http402', source: `GET ${resource} → 402`, text: x402Body({ payTo: addrs.payee, priceUsd: c.amountUsd, resource, description }) }],
     };
   }
   const fill = (t: string) => t.replaceAll('{ATTACKER}', addrs.attacker).replaceAll('{AMOUNT}', String(c.amountUsd));

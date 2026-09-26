@@ -31,7 +31,7 @@ describe('buildBarrier(custom)', () => {
     expect(b.obfuscation).toBe('base64');
   });
   it('builds a legit toll exactly like the preset, at the custom price', () => {
-    const legit: CustomIncident = { ...attack, id: 'rpc-toll-cd34', cls: 'legit', skin: 'legit', amountUsd: 0.5, title: 'RPC toll',
+    const legit: CustomIncident = { ...attack, id: 'rpc-toll-cd34', cls: 'legit', skin: 'legit', amountUsd: 1.5, title: 'RPC toll',
       content: [{ kind: 'http402', source: 'x', text: '10k archive RPC calls' }] };
     const b = buildBarrier({ type: 'legit', custom: legit, incidentId: legit.id }, addrs);
     expect(b.id).toBe('legit');
@@ -43,5 +43,9 @@ describe('buildBarrier(custom)', () => {
     expect(b.content[0].source).toContain(PAYEE_ENS);
     expect(b.content[0].text).toContain(addrs.payee);
     expect(b.content[0].text).toContain('10k archive RPC calls');
+    // The description carries the price in dollars like the preset does, so the airbag's reader is not left to
+    // reconstruct it from maxAmountRequired ("1500000") — which it misread as $15.
+    expect(b.content[0].text).toContain('10k archive RPC calls — $1.50 USDC');
+    expect(b.content[0].text).toContain('"maxAmountRequired": "1500000"');
   });
 });
