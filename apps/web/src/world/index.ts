@@ -108,7 +108,7 @@ export async function mountWorld(root: HTMLElement) {
   });
   const audio = new WorldAudio(); // nav + audio lane: WebAudio starts on the first gesture
   const hints =
-    '<b>Arrows/WASD</b> move · <b>drag</b> pan · <b>right-drag</b> tilt · <b>scroll</b> dive in · <b>click a car</b> to follow · <b>Space</b>: latest crash';
+    '<b>Arrows/WASD</b> move · <b>drag</b> look around · <b>Shift+drag</b> pan · <b>scroll</b> dive in · <b>click a car</b> to follow · <b>Space</b>: latest crash';
   const hud = createHud(wrap, store, { mock, minimap: minimap.el, sub: 'open proving ground × sekisho 関所', sound: audio, hints });
 
   let renderer: THREE.WebGLRenderer;
@@ -649,8 +649,8 @@ export async function mountWorld(root: HTMLElement) {
     if (byHuman && rep) showReport(rep, true);
     nav!.chase(() => (actors.get(a.id) === a ? l.car.group.getWorldPosition(v) : null), { dist, yaw: l.variant === 'bare' ? -2.2 : -0.95 });
   };
-  const frameAll = () => nav!.frameBox(allBounds, { pitch: 0.86, yaw: 0.22, pad: 1.0 });
-  const frameTrack = (t: TrackView, yaw = 0.3) => nav!.frameBox(t.bounds(), { pitch: 0.62, yaw, pad: 1.05 });
+  const frameAll = () => nav!.frameBox(allBounds, { pitch: 0.86, yaw: 0.22, pad: 1.4 });
+  const frameTrack = (t: TrackView, yaw = 0.3) => nav!.frameBox(t.bounds(), { pitch: 0.62, yaw, pad: 1.35 });
 
   /** Projector mode: after 20 s without input, cycle through active tracks and cut to crashes. */
   const tour = {
@@ -846,8 +846,9 @@ export async function mountWorld(root: HTMLElement) {
   // ── loop ──────────────────────────────────────────────────────────────────
   const timer = new THREE.Timer();
   const tmpV = new THREE.Vector3();
-  const empty = el('div', { class: 'empty-track', html: '<b>The proving ground is clear</b>Scan the QR to send a car, or build a track' });
-  wrap.append(empty);
+  // no empty-state banner: the world explains itself (owner feedback)
+  const empty = el('div', { class: 'empty-track' });
+  empty.style.display = 'none';
   let W = window.innerWidth;
   let H = window.innerHeight;
   let lastMini = 0;
@@ -967,7 +968,7 @@ export async function mountWorld(root: HTMLElement) {
       if (done === 2 && a.leaveAt === undefined) a.leaveAt = now + 9000;
       if (a.leaveAt !== undefined && now > a.leaveAt) removeActor(a.id);
     }
-    empty.style.display = actors.size ? 'none' : '';
+    // empty-state banner removed
     if (nav!.mode !== 'follow') following = '';
     if (reportFor && !(reportPinned && following === reportFor) && now > reportUntil) hideReport();
 

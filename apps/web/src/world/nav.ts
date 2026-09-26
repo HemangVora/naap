@@ -6,7 +6,7 @@ import './nav.css';
 // NaAP World v5 navigation: an overhead strategy camera (Cities: Skylines / RTS), per visitor.
 //   keys  : Arrows / WASD pan across the ground (speed scales with height), Q/E rotate, R/F or PageUp/PageDown zoom,
 //           Shift faster, Space glides to the latest crash.
-//   mouse : left-drag grabs the ground and pans, right-drag (or Ctrl/Alt + drag) orbits and tilts, the wheel zooms toward
+//   mouse : drag turns and tilts the view, Shift/right/middle-drag grabs the ground and pans, the wheel zooms toward
 //           the cursor from a ~220 m overview down to ~6 m over the ground (pitch eases from ~60° to ~25° on the way down),
 //           double-click glides there (index.ts).
 //   touch : one finger pans, two fingers pinch-zoom and twist-rotate, tap a car to follow (index.ts click).
@@ -317,7 +317,8 @@ export class NavCamera {
         pinch = { d: s.d, a: s.a };
         return;
       }
-      orbiting = e.pointerType === 'mouse' && (e.button === 2 || e.button === 1 || e.ctrlKey || e.altKey);
+      // Mouse: plain drag turns/tilts the view (trackpads have no easy right-drag); Shift / right / middle drag pans.
+      orbiting = e.pointerType === 'mouse' && !(e.shiftKey || e.button === 2 || e.button === 1);
       if (!orbiting) this.startGrab(e.clientX, e.clientY);
     });
     el.addEventListener('pointermove', (e) => {
