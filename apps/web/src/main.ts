@@ -19,6 +19,9 @@ async function route() {
   } else if (path === '/tracks/new') {
     const { mountTrackBuilder } = await import('./pages/tracks');
     mountTrackBuilder(root);
+  } else if (path === '/guard') {
+    const { mountGuard } = await import('./pages/guard');
+    await mountGuard(root);
   } else if (path.startsWith('/car/')) {
     const { mountCar } = await import('./pages/car');
     mountCar(root, decodeURIComponent(path.slice('/car/'.length)));
