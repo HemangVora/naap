@@ -69,10 +69,11 @@ Prizes: **Intercepta**, **ENS** and **Curvegrid**.
 - A deterministic static scan names the exact function for each flaw: unprotected withdraw or mint, missing access control on owner setters, an unprotected price/oracle setter (the Moonwell class), `tx.origin` auth, delegatecall to a caller-supplied address.
 - Then it compiles and deploys the contract to the isolated Base fork and, from an attacker account, tries to confirm the top findings. A confirmed finding carries the fork tx hash that proves it. Everything is wrapped in `evm_snapshot`/`evm_revert` and only ever targets the contract just created.
 - Code: [`scan.ts`](packages/guard/src/scan.ts), [`engine.ts`](packages/guard/src/engine.ts), [`presets.ts`](packages/guard/src/presets.ts).
+- **MultiBaas:** not used. The guard and Sekisho talk to the fork and Sepolia directly through viem, so we have no MultiBaas feedback to give.
 
 ### Also used
 - **Jev (TypeSafe)**, through OpenRouter's decisions endpoint:
-  - A **tripwire**. Yes/no nouls such as "moves funds?", "encoded?", "claims authority?". It can only add friction and never approves.
+  - A **tripwire**. Yes/no calls such as "moves funds?", "encoded?", "claims authority?". It can only add friction and never approves.
   - The **crash-test judge**: "did the agent act on the attacker's instruction?"
   - Code: [`jev.ts`](packages/course/src/jev.ts)
 - **Claude** (Sonnet 5 planner, Haiku 4.5 reader and audience cars).
@@ -106,3 +107,7 @@ NODE_ENV=development pnpm --filter @crumple/server start   # starts the Base for
 - Architecture, the interface contract and the UI design were written with Claude Opus 5.5 (Claude Code).
 - The seven packages were implemented by Claude Fable 5.1 subagents against that contract.
 - All commits are in this repo's history.
+
+## Team
+
+Solo build: **Hemang Vora**, GitHub [@HemangVora](https://github.com/HemangVora).
