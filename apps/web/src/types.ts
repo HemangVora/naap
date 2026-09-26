@@ -98,6 +98,9 @@ export const CONTROL_TONE: Record<Control, 'vermilion' | 'yellow' | 'amber' | 'b
   WORLD_EXPIRED: 'amber',
 };
 
+/** On-screen name for a control code: the step-up codes keep their wire names (WORLD_*) but read as owner approval. */
+export const controlLabel = (c: string) => c.replace(/^WORLD_/, 'OWNER_');
+
 export const PALETTE = {
   charcoal: '#0d0e11',
   concrete: '#2a2c31',

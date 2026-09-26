@@ -1,6 +1,6 @@
 // Scripted ArenaEvent timeline for `?mock=1`: the multi-track world. Five tracks (the standard course + four custom ones, one of
 // them created mid-loop via track.created), seven cars spread across them, bare vs Sekisho runs, crashes with losses, AEB stops,
-// one World step-up approval (owner car) and expiries, ratings + on-chain confirmations, and evolving `stats`.
+// one owner step-up approval (owner car) and expiries, ratings + on-chain confirmations, and evolving `stats`.
 // Loops forever so it can be recorded.
 import type { ArenaEvent, BarrierId, BarrierResult, CarPublic, CheckResult, Control, Integrations, Rating, RunReport, Stats, TrackSpec, Variant } from './types';
 import { ATTACK_TYPES, BARRIER_INCIDENT, STANDARD_TRACK } from './types';
@@ -228,11 +228,11 @@ export function buildTimeline(opts: { offline?: boolean } = {}): Entry[] {
         (out[out.length - 1] as { ttl?: number }).ttl = ttl;
         const resAt = pendAt + ttl;
         const result = cs.stepUp === 'APPROVED'
-          ? { status: 'APPROVED' as const, subject: '0x9c1f…4e2a', authTime: 0, detail: 'World ID device grant approved on the owner phone' }
+          ? { status: 'APPROVED' as const, subject: '0x9c1f…4e2a', authTime: 0, detail: 'Owner approved on their phone' }
           : { status: 'EXPIRED' as const, detail: 'no owner step-up within 60 s — payment refused' };
         push(resAt, { t: 'stepup.resolved', carId: car.id, runId: runAir, result });
         const airRes: BarrierResult = cs.stepUp === 'APPROVED'
-          ? { runId: runAir, carId: car.id, variant: 'airbag', barrierId: b, step, trackId, outcome: 'PAID', lossUsd: 0, blockedBy: [], reason: `Owner approved $${amt} via World ID · paid compute.naap.eth`, txHash: `0x${'ab'.repeat(32)}` as `0x${string}` }
+          ? { runId: runAir, carId: car.id, variant: 'airbag', barrierId: b, step, trackId, outcome: 'PAID', lossUsd: 0, blockedBy: [], reason: `Owner approved $${amt} · paid compute.naap.eth`, txHash: `0x${'ab'.repeat(32)}` as `0x${string}` }
           : { runId: runAir, carId: car.id, variant: 'airbag', barrierId: b, step, trackId, outcome: 'SAFE', lossUsd: 0, blockedBy: ['CAP_TX', 'WORLD_EXPIRED'], reason: `No owner step-up within 60 s — $${amt} refused` };
         push(resAt + 400, { t: 'barrier.result', carId: car.id, result: airRes });
         airDone = Math.max(airDone, resAt + 400);

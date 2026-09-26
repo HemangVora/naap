@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { ArenaEvent, BarrierId, Variant } from '../types';
-import { BARRIERS, BARRIER_SHORT, fmtUsd } from '../types';
+import { BARRIERS, BARRIER_SHORT, controlLabel, fmtUsd } from '../types';
 import { Store } from '../store';
 import { connectFeed, isMock } from '../feed';
 import { el } from '../dom';
@@ -237,7 +237,7 @@ export function mountArena(root: HTMLElement) {
   }
 
   const lanePos = (l: LaneActor, dx = 0) => new THREE.Vector3(l.car.group.position.x + dx, 3.4, l.car.group.position.z);
-  const chipsFor = (blockedBy: string[]) => blockedBy.map((c) => c.replace('PROVENANCE_', 'PROV·').replace('MANDATE_', 'MANDATE·').replace('_', '·'));
+  const chipsFor = (blockedBy: string[]) => blockedBy.map((c) => controlLabel(c).replace('PROVENANCE_', 'PROV·').replace('MANDATE_', 'MANDATE·').replace('_', '·'));
   const noseLen = (car: CarMesh) => (NOSE_X - CRUSH_MAX * car.crush) * CAR_SCALE;
 
   /** Drop the lane's current sim (end state persists on the car) so ordinary motion can resume. */
@@ -310,9 +310,9 @@ export function mountArena(root: HTMLElement) {
       case 'stepup.pending': {
         const a = spawn(e.carId);
         const g = gateFor(a.slot, e.barrierId);
-        g.setState('stepup', e.summary, e.canApprove ? ['CAP·TX', 'WORLD ID'] : ['CAP·TX', 'NO OWNER']);
+        g.setState('stepup', e.summary, e.canApprove ? ['CAP·TX', 'OWNER'] : ['CAP·TX', 'NO OWNER']);
         g.startStepUp(Date.now(), e.expiresAt * 1000);
-        floater('STEP UP · World ID', lanePos(a.lanes.airbag, 1), 'amber');
+        floater('STEP UP · owner approval', lanePos(a.lanes.airbag, 1), 'amber');
         break;
       }
       case 'stepup.resolved': {
@@ -320,8 +320,8 @@ export function mountArena(root: HTMLElement) {
         const l = a.lanes.airbag;
         if (!l.barrier) break;
         const g = gateFor(a.slot, l.barrier);
-        if (e.result.status === 'APPROVED') g.setState('paid', `Owner approved via World ID${e.result.subject ? ` · ${e.result.subject}` : ''}`, ['WORLD ✓']);
-        else g.setState('expired', e.result.detail, [e.result.status === 'DENIED' ? 'WORLD·DENIED' : 'WORLD·EXPIRED']);
+        if (e.result.status === 'APPROVED') g.setState('paid', `Owner approved${e.result.subject ? ` · ${e.result.subject}` : ''}`, ['OWNER ✓']);
+        else g.setState('expired', e.result.detail, [e.result.status === 'DENIED' ? 'OWNER·DENIED' : 'OWNER·EXPIRED']);
         break;
       }
       case 'barrier.result': {
@@ -357,7 +357,7 @@ export function mountArena(root: HTMLElement) {
           const target = targetFor(a.slot, r.barrierId);
           const chips = chipsFor(r.blockedBy);
           if (r.outcome === 'PAID') {
-            g.setState('paid', r.barrierId === 'over-limit' ? r.reason : `Paid ${fmtUsd(1)} · compute.naap.eth`, r.barrierId === 'over-limit' ? ['WORLD ✓', 'PAID $40'] : ['PAID']);
+            g.setState('paid', r.barrierId === 'over-limit' ? r.reason : `Paid ${fmtUsd(1)} · compute.naap.eth`, r.barrierId === 'over-limit' ? ['OWNER ✓', 'PAID $40'] : ['PAID']);
             target?.raise(true);
             l.phase = 'through';
             l.maxSpeed = 13;

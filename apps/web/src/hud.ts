@@ -54,7 +54,7 @@ export function createHud(root: HTMLElement, store: Store, opts: { mock: boolean
   // bottom
   const legend = el('div', {
     class: 'legend',
-    html: `<span><i style="background:var(--vermilion)"></i>bare lane · crash wall</span><span><i style="background:var(--green)"></i>airbag lane · sekisho gate</span><span><i style="background:var(--amber)"></i>step-up · World ID</span>`,
+    html: `<span><i style="background:var(--vermilion)"></i>bare lane · crash wall</span><span><i style="background:var(--green)"></i>airbag lane · sekisho gate</span><span><i style="background:var(--amber)"></i>step-up · owner approval</span>`,
   });
   const qrCanvas = el('canvas');
   const joinUrl = `${location.origin}/join`;
@@ -67,7 +67,7 @@ export function createHud(root: HTMLElement, store: Store, opts: { mock: boolean
   hud.append(top, left, mid, right, bottom);
   root.append(hud);
 
-  // owner step-up card (World QR + code)
+  // owner step-up card (approval QR + code)
   const stepCard = el('div', { class: 'stepup-card' });
   stepCard.style.display = 'none';
   root.append(stepCard);
@@ -139,7 +139,7 @@ export function createHud(root: HTMLElement, store: Store, opts: { mock: boolean
       stepCard.innerHTML = '';
       if (stepCanvas && stepQrFor) stepCard.append(stepCanvas);
       stepCard.append(
-        el('div', { class: 't', text: status === 'APPROVED' ? 'Owner approved via World ID' : status === 'EXPIRED' ? 'Step-up expired' : status === 'DENIED' ? 'Owner denied' : 'Owner step-up · World ID' }),
+        el('div', { class: 't', text: status === 'APPROVED' ? 'Owner approved' : status === 'EXPIRED' ? 'Step-up expired' : status === 'DENIED' ? 'Owner denied' : 'Owner approval needed' }),
         el('div', { class: 's', text: su.result?.detail ?? su.summary }),
         su.userCode && !status ? el('div', { class: 'code', text: su.userCode }) : el('div', { class: 's', text: `${esc(owner!.car.name)} · ${BARRIER_SHORT[su.barrierId]}` }),
         !status ? el('div', { class: 'ring', html: `<b>${left}s</b> left to approve on the owner phone` }) : el('div', { class: 'ring', text: status === 'APPROVED' ? 'Gate opens · $40 paid to compute.naap.eth' : 'Gate arm down · payment refused' }),

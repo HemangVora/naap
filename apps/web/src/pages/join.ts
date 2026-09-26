@@ -39,7 +39,7 @@ export function mountJoin(root: HTMLElement) {
     el('h2', { html: 'Send a car <span>down the track</span>' }),
     el('p', { class: 'lead', text: 'Your agent drives five barriers twice: once bare, once behind the Sekisho airbag. Watch it on the big screen.' }),
   );
-  if (ownerToken) page.append(el('div', { class: 'owner-banner', text: 'Owner mode: this is car #1. Over-limit payments will ask you to approve on World ID.' }));
+  if (ownerToken) page.append(el('div', { class: 'owner-banner', text: 'Owner mode: this is car #1. Over-limit payments will ask for your approval.' }));
 
   // ── Pick a track (GET /api/tracks; default: the NaAP standard course) ──
   const wantedTrack = params.get('track');

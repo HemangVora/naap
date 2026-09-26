@@ -19,7 +19,7 @@ const SUB: Record<string, string> = {
   'grok-morse': 'morse reply · @drb_whale',
   freysa: 'inbox · pay() "receives"',
   'x402-swap': '402 payTo swapped',
-  'over-limit': '$40 · cap $5 · World',
+  'over-limit': '$40 · cap $5 · owner',
 };
 
 /** Bright NCAP hall: pale epoxy floor, white lane lines, metre ticks, floodlight banks, checkerboards, cable channels. */

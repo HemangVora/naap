@@ -3,7 +3,7 @@ import './report.css';
 import type { RunReport } from '@crumple/core';
 import type { BarrierResult, CarPublic, TrackObstacle, Variant } from '../types';
 import { obstacleTitle } from '../incidents';
-import { BARRIERS, BARRIER_SHORT, CONTROL_TONE, ETHERSCAN_TX, fmtUsd } from '../types';
+import { BARRIERS, BARRIER_SHORT, CONTROL_TONE, ETHERSCAN_TX, controlLabel, fmtUsd } from '../types';
 import { Store, type CarState } from '../store';
 import { connectFeed, isMock } from '../feed';
 import { el, esc, starsText } from '../dom';
@@ -67,7 +67,7 @@ export function mountCar(root: HTMLElement, carId: string) {
       const su = c.stepUp;
       const status = su.result?.status;
       const card = el('div', { class: `stepup-phone ${status === 'APPROVED' ? 'approved' : status ? 'expired' : ''}` });
-      card.append(el('div', { class: 't', text: status === 'APPROVED' ? 'Approved via World ID' : status === 'EXPIRED' ? 'Step-up expired' : status === 'DENIED' ? 'Denied' : 'Approve on World ID' }));
+      card.append(el('div', { class: 't', text: status === 'APPROVED' ? 'Approved by owner' : status === 'EXPIRED' ? 'Step-up expired' : status === 'DENIED' ? 'Denied' : 'Owner approval needed' }));
       card.append(el('div', { class: 's', text: su.result?.detail ?? su.summary }));
       if (!status && su.verificationUri) {
         if (qrFor !== su.verificationUri) {
@@ -77,7 +77,7 @@ export function mountCar(root: HTMLElement, carId: string) {
         }
         if (qrCanvas) card.append(qrCanvas);
         if (su.userCode) card.append(el('div', { class: 'code', text: su.userCode }));
-        card.append(el('a', { class: 'primary', href: su.verificationUri, target: '_blank', rel: 'noopener', text: 'Open World App' }));
+        card.append(el('a', { class: 'primary', href: su.verificationUri, target: '_blank', rel: 'noopener', text: 'Open approval page' }));
         card.append(el('div', { class: 'left', text: `${Math.max(0, Math.round((su.expiresAt * 1000 - Date.now()) / 1000))}s left` }));
       }
       page.append(card);
@@ -177,7 +177,7 @@ function cell(c: CarState, v: Variant, b: (typeof BARRIERS)[number]) {
   const r: BarrierResult | undefined = l.results[b];
   if (!r) {
     const su = v === 'airbag' && c.stepUp && c.stepUp.barrierId === b && !c.stepUp.result;
-    if (su) return el('div', { class: 'cell stepup' }, el('div', { class: 'o', text: 'STEP-UP' }), el('div', { class: 'r', text: 'waiting for World ID' }));
+    if (su) return el('div', { class: 'cell stepup' }, el('div', { class: 'o', text: 'STEP-UP' }), el('div', { class: 'r', text: 'waiting for owner approval' }));
     if (l.current === b) {
       const mcp = c.car.kind === 'mcp';
       return el('div', { class: 'cell live' }, el('div', { class: 'o', text: mcp ? 'waiting for your agent…' : v === 'bare' ? 'driving…' : 'checking…' }));
@@ -189,7 +189,7 @@ function cell(c: CarState, v: Variant, b: (typeof BARRIERS)[number]) {
   node.append(el('div', { class: 'o', text: label }), el('div', { class: 'r', text: r.reason }));
   if (r.blockedBy.length) {
     const chips = el('div', { class: 'mini-chips' });
-    for (const ctl of r.blockedBy.slice(0, 4)) chips.append(el('span', { class: CONTROL_TONE[ctl], text: ctl }));
+    for (const ctl of r.blockedBy.slice(0, 4)) chips.append(el('span', { class: CONTROL_TONE[ctl], text: controlLabel(ctl) }));
     node.append(chips);
   }
   return node;
@@ -255,7 +255,7 @@ function reportSheet(r: RunReport, obstacles: TrackObstacle[], txHash: string | 
     const air = el('div', { class: s.sekisho.outcome }, el('div', { class: 'o', text: OUTCOME_LABEL[s.sekisho.outcome] }));
     if (s.sekisho.blockedBy.length) {
       const chips = el('div', { class: 'mini-chips' });
-      for (const ctl of s.sekisho.blockedBy.slice(0, 2)) chips.append(el('span', { class: CONTROL_TONE[ctl], text: ctl }));
+      for (const ctl of s.sekisho.blockedBy.slice(0, 2)) chips.append(el('span', { class: CONTROL_TONE[ctl], text: controlLabel(ctl) }));
       air.append(chips);
     } else air.append(el('div', { class: 'w', text: s.sekisho.reason }));
     steps.append(air);

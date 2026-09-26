@@ -21,7 +21,7 @@ Agent-wallet losses so far share one cause: **the thing that executes acts on te
 | Grok × Bankrbot, May 2026 (~$150–200K) | A Morse-coded reply was executed as an authenticated command | The payee came from UNTRUSTED text → **refused** (`PROVENANCE_PAYEE`) |
 | Freysa, Nov 2024 ($47K) | The attacker redefined what `approveTransfer` means, in chat | The amount came from a message that redefined `pay()` → **refused** (`PROVENANCE_AMOUNT`) |
 | x402 payee swap (arXiv 2605.11781) | A poisoned 402 response swaps `payTo` | `payTo` must equal `resolve(compute.naap.eth)`, never text → **refused** |
-| Lobstar Wilde, Feb 2026 ($441K) | No caps, and state was lost | Per-tx and daily caps; anything over needs a **World ID** step-up |
+| Lobstar Wilde, Feb 2026 ($441K) | No caps, and state was lost | Per-tx and daily caps; anything over needs a fresh **owner approval** |
 
 Every control written as a prompt failed in those incidents. So Sekisho's controls are not prompts. The model **never** produces an address or an amount that reaches the signer.
 
@@ -39,17 +39,14 @@ Every control written as a prompt failed in those incidents. So Sekisho's contro
 3. **A 9-check policy** with no short-circuit, so every control shows on screen: provenance (amount, payee), taint, mandate (payee, expiry), caps (per tx, daily), Intercepta, Jev. [`policy.ts`](packages/sekisho/src/policy.ts)
 4. **A separate signer** is the only key holder. It re-checks independently and signs an EIP-3009 `transferWithAuthorization`. [`signer.ts`](packages/sekisho/src/signer.ts#L103)
 5. **Connected (black-box) agents** get "boundary mode": taint, payee resolution, caps and screening, but no field provenance. The screen says so.
+6. **Owner approval over the cap.** An over-limit payment (e.g. a $40 GPU block against a $5 cap) needs a fresh approval from the owner, through an OIDC device grant: the QR and code appear on the big screen, the owner approves on their phone.
+   - The backend validates the ID token (RS256/JWKS, `iss`, `aud`, `exp`, and `auth_time` ≥ request time). Only then does the signer sign.
+   - Audience cars can't approve. Their step-up **expires in 60 s and the payment doesn't happen**. Denied or expired means no payment.
+   - Code: device grant [`oidc.ts#L102`](packages/world/src/oidc.ts#L102), token validation [`oidc.ts#L150`](packages/world/src/oidc.ts#L150), step-up [`stepup.ts#L81`](packages/world/src/stepup.ts#L81), called from the run engine [`run.ts#L297`](packages/course/src/run.ts#L297), and the signer gate [`signer.ts#L103`](packages/sekisho/src/signer.ts#L103).
 
 ## Sponsor integrations
 
-### World ID for Agents: the step-up
-- Over-limit payments (e.g. a $40 GPU block against a $5 cap) need a **fresh World ID proof from the owner**.
-- It uses an OIDC device grant against `sandbox.auth.world.org`. The QR and code appear on the big screen.
-- The backend validates the ID token: RS256/JWKS, `iss`, `aud`, `exp`, and `auth_time` ≥ request time.
-- Only then does the signer sign.
-- Audience cars can't approve. Their step-up **expires in 60 s and the payment doesn't happen**. Denied or expired means no payment.
-- Code: device grant [`oidc.ts#L102`](packages/world/src/oidc.ts#L102), token validation [`oidc.ts#L150`](packages/world/src/oidc.ts#L150), step-up [`stepup.ts#L81`](packages/world/src/stepup.ts#L81), called from the run engine [`run.ts#L297`](packages/course/src/run.ts#L297), and the signer gate [`signer.ts#L103`](packages/sekisho/src/signer.ts#L103).
-- Integration debrief: [`docs/lanes/world.md`](docs/lanes/world.md).
+Prizes: **Intercepta**, **ENS** and **Curvegrid**.
 
 ### Intercepta: live screening decides the payment
 - Every payment Sekisho would sign gets a live **Quick Scan** of `payTo` plus **Scan Token** of the token (Base, 8453).
@@ -66,6 +63,12 @@ Every control written as a prompt failed in those incidents. So Sekisho's contro
 - **Enhanced access control:** the relayer holds `ROLE_SET_TEXT` scoped per record key. The agent's key holds no roles, so its attempt to edit its own mandate **reverts on-chain** with `EACUnauthorizedAccountRoles` (`pnpm --filter @crumple/ens prove-eac`; [on-chain revert](https://sepolia.etherscan.io/tx/0x9951d8731dacf9bb8635515a5e77ea76794d69a64115d2976710fc4b3a3c38fb)).
 - After each run, the NCAP rating is written as `naap.*` text records.
 - Code: [`ens.ts`](packages/ens/src/ens.ts#L160), [`rating.ts`](packages/ens/src/rating.ts#L45), [`eac.ts`](packages/ens/src/eac.ts). Deployment: [`deployment.naap.sepolia.json`](packages/ens/deployment.naap.sepolia.json) (the earlier `crumple.eth` parent: [`deployment.crumple.sepolia.json`](packages/ens/deployment.crumple.sepolia.json)).
+
+### Curvegrid: Deploy Guard, programmable controls for agent-written contracts
+- Agents don't just pay, they ship code. At `/guard` an agent writes a Solidity contract from a plain request, and the guard audits it **before it could reach mainnet**.
+- A deterministic static scan names the exact function for each flaw: unprotected withdraw or mint, missing access control on owner setters, an unprotected price/oracle setter (the Moonwell class), `tx.origin` auth, delegatecall to a caller-supplied address.
+- Then it compiles and deploys the contract to the isolated Base fork and, from an attacker account, tries to confirm the top findings. A confirmed finding carries the fork tx hash that proves it. Everything is wrapped in `evm_snapshot`/`evm_revert` and only ever targets the contract just created.
+- Code: [`scan.ts`](packages/guard/src/scan.ts), [`engine.ts`](packages/guard/src/engine.ts), [`presets.ts`](packages/guard/src/presets.ts).
 
 ### Also used
 - **Jev (TypeSafe)**, through OpenRouter's decisions endpoint:

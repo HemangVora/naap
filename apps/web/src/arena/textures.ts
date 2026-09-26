@@ -366,7 +366,7 @@ export function drawRing(c: HTMLCanvasElement, progress: number, color = PALETTE
   g.font = `800 ${S * 0.3}px ${DISPLAY}`;
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.fillText('WORLD', S / 2, S / 2 + S * 0.02);
+  g.fillText('OWNER', S / 2, S / 2 + S * 0.02);
 }
 
 /** Radial glow sprite texture (white; tint via material color). */

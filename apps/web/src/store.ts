@@ -106,7 +106,7 @@ const INTEGRATION_LABEL: Record<keyof Integrations, string> = {
   llm: 'LLM',
   jev: 'Jev',
   intercepta: 'Intercepta',
-  world: 'World',
+  world: 'Owner approval',
   ens: 'ENS',
   fork: 'Base fork',
 };

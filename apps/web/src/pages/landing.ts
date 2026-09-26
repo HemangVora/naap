@@ -55,8 +55,8 @@ const INCIDENTS = [
     when: 'Feb 2026',
     loss: '$441K',
     broke: 'No spending caps, and the agent lost track of its own state.',
-    stop: 'Per-payment and daily caps. Anything over needs a fresh World ID proof from the owner.',
-    code: 'CAP_TX + WORLD ID',
+    stop: 'Per-payment and daily caps. Anything over needs a fresh approval from the owner.',
+    code: 'CAP_TX + OWNER APPROVAL',
   },
   {
     name: 'x402 payee swap',
@@ -77,7 +77,6 @@ const OBSTACLES = [
 ];
 
 const BUILT_WITH = [
-  ['World ID', 'Step-up proof for over-limit payments'],
   ['Intercepta', 'Live address and token screening'],
   ['ENS', 'Mandates and ratings on ENSv2'],
   ['Base', 'Mainnet fork, real USDC'],
@@ -209,7 +208,7 @@ export function mountLanding(root: HTMLElement) {
         <li><h3>The planner sees only the owner</h3><p>The model that decides to pay reads the owner’s request and the mandate. Nothing else.</p></li>
         <li><h3>A quarantined reader handles the rest</h3><p>Tweets, inboxes and 402 bodies go to a separate model that can extract facts but can’t act. Morse, base64 and hex are decoded first.</p></li>
         <li><h3>The interpreter resolves payTo from ENS</h3><p>Every value carries a label. A payee is only ever <code>resolve(&lt;name the owner wrote&gt;)</code>, never text a model produced.</p></li>
-        <li><h3>A separate signer holds the key</h3><p>It re-runs the checks on its own, then signs an EIP-3009 transfer. Over the cap, it waits for the owner’s World ID.</p></li>
+        <li><h3>A separate signer holds the key</h3><p>It re-runs the checks on its own, then signs an EIP-3009 transfer. Over the cap, it waits for the owner’s approval.</p></li>
       </ol>
     </div>
 
