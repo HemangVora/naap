@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import {
-  DEFAULT_TRACK, DEFAULT_TRACK_ID, INCIDENT_LIMITS, MAX_CONCURRENT_RUNS, PARENT_ENS, RUN_COOLDOWN_PER_PHONE_SEC, skinFor,
+  DEFAULT_TRACK, DEFAULT_TRACK_ID, INCIDENT_ENS_KEYS, INCIDENT_LIMITS, MAX_CONCURRENT_RUNS, PARENT_ENS, RUN_COOLDOWN_PER_PHONE_SEC, skinFor,
   type ArenaEvent, type Car, type CarSpec, type CustomIncident, type Rating, type Stats, type TrackSpec,
 } from '@crumple/core';
 import { publicTrack, toPublic, type CarStore } from './public.js';
@@ -15,7 +15,7 @@ import { carId, randomSuffix, trackSlug, validateSpec, validateTrack, type SpecI
 import { computeStats } from './stats.js';
 import { McpRegistry, mountMcp, type Admitted, type AdmitMeta } from './mcp.js';
 import { buildReport, reportLlmFromEnv, type ReportLlm } from './report.js';
-import { draftIncident, incidentId, validateIncident } from './incidents.js';
+import { draftIncident, incidentHash, incidentId, validateIncident } from './incidents.js';
 
 /** Global bound on waiting cars (each run costs LLM credit). */
 const MAX_QUEUED_CARS = Number(process.env.MAX_QUEUED_CARS ?? 12);
@@ -58,8 +58,37 @@ export async function buildApp(w: Wiring, store?: CarStore, opts: AppOptions = {
   const incidentCooldown = new Cooldown(20);
   const draftCooldown = new Cooldown(8);
   const draftWindow: number[] = [];
-  /** Publishes `inc-<id>.naap.eth` (Task 5); no-op until then. */
-  const publishOnChain = (_i: CustomIncident) => {};
+  /**
+   * Publishes `inc-<id>.naap.eth` in the background under a per-process budget (≤ 1 registration per 60 s, ≤ 40 total):
+   * each registration is a relayer transaction. Never blocks or fails the publish; over budget or ENS off → off-chain.
+   */
+  let lastOnchain = 0;
+  let onchainCount = 0;
+  const publishOnChain = (i: CustomIncident) => {
+    const ens = w.incidentsEns;
+    if (!ens || onchainCount >= 40 || Date.now() - lastOnchain < 60_000) return;
+    lastOnchain = Date.now();
+    onchainCount++;
+    const label = `inc-${i.id}`;
+    const ensName = `${label}.${PARENT_ENS}`;
+    void (async () => {
+      try {
+        await ens.register(label);
+        const r = await ens.writeText(ensName, [
+          { key: INCIDENT_ENS_KEYS.title, value: i.title },
+          { key: INCIDENT_ENS_KEYS.author, value: i.author },
+          { key: INCIDENT_ENS_KEYS.cls, value: i.cls },
+          { key: INCIDENT_ENS_KEYS.hash, value: incidentHash(i) },
+          { key: INCIDENT_ENS_KEYS.url, value: `${process.env.PUBLIC_URL ?? ''}/api/incidents/${i.id}` },
+        ]);
+        if (r.status !== 'success') throw new Error(`reverted ${r.hash}`);
+        db.setIncidentEns(i.id, ensName, r.hash);
+        bus.emit({ t: 'incident.onchain', id: i.id, ensName, txHash: r.hash });
+      } catch (e) {
+        app.log.warn({ err: String(e) }, `incident ENS publish failed for ${ensName}`);
+      }
+    })();
+  };
   const stats = (): Stats => computeStats(db.allResults(), db.ratings().length, db.trackCount());
   /** Deferred so listeners see `barrier.result` / `rating` before the stats it caused. */
   const emitStats = () => queueMicrotask(() => bus.emit({ t: 'stats', stats: stats() }));

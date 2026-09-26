@@ -4,14 +4,46 @@ import { keccak256, toHex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import {
   FakeChain, FakeMandateSource, FakeRatingWriter, PAYEE_ENS, jevConfig, llmConfig,
-  type Chain, type Integrations, type MandateSource, type RatingWriter,
+  type Address, type Chain, type Integrations, type MandateSource, type RatingWriter,
 } from '@crumple/core';
 import { createSekisho, createSigner, llmFromEnv } from '@crumple/sekisho';
 import { createScreener, ATTACKERS, PAYEE } from '@crumple/intercepta';
 import { createStepUp, isLive as worldLive } from '@crumple/world';
 import { createChain, startFork, paymentRequiredBody, paymentRequirements, type ForkHandle } from '@crumple/chain';
 import { createJev, JevJudge, JevTripwire, driverFor, runCar } from '@crumple/course';
-import type { Wiring } from './wiring.js';
+import Anthropic from '@anthropic-ai/sdk';
+import type { EnsMandateSource } from '@crumple/ens';
+import type { DraftLlm } from './incidents.js';
+import type { IncidentsEns, Wiring } from './wiring.js';
+
+/** The incident drafter: Claude Haiku, one plain-text turn, 20 s. Same client construction as report.ts. */
+const DRAFT_MODEL = 'claude-haiku-4-5-20251001';
+const DRAFT_TIMEOUT_MS = 20_000;
+
+function draftLlmFromEnv(): DraftLlm | undefined {
+  const cfg = llmConfig();
+  if (cfg.provider === 'none') return undefined;
+  const client = new Anthropic({ apiKey: cfg.apiKey, baseURL: cfg.baseURL, maxRetries: 0 });
+  const model = cfg.model(DRAFT_MODEL);
+  return async (system, user) => {
+    const res = await client.messages.create(
+      { model, max_tokens: 900, system, messages: [{ role: 'user', content: user }] },
+      { timeout: DRAFT_TIMEOUT_MS, maxRetries: 0 },
+    );
+    return res.content.map((c) => (c.type === 'text' ? c.text : '')).join('');
+  };
+}
+
+/** Only the real ENS lane can register subnames; the fake and local sources have no such methods, so incidents stay off-chain there. */
+function incidentsEnsFrom(mandates: MandateSource, owner: Address): IncidentsEns | undefined {
+  const m = mandates as Partial<EnsMandateSource>;
+  if (typeof m.registerSubname !== 'function' || typeof m.writeText !== 'function') return undefined;
+  const ens = mandates as EnsMandateSource;
+  return {
+    register: (label) => ens.registerSubname(label, owner),
+    writeText: (ensName, records) => ens.writeText(ensName, records),
+  };
+}
 
 const log = (l: string) => console.error(`[wire] ${l}`);
 
@@ -71,6 +103,8 @@ export async function createWiring(): Promise<Wiring> {
     integrations,
     ownerAddress,
     runCar: (car, spec, deps, track) => runCar(car, spec, deps, addrs, track),
+    incidentsEns: incidentsEnsFrom(mandates, ownerAddress),
+    draftLlm: draftLlmFromEnv(),
     async mountX402(app) {
       // A real x402 resource so connected agents can hit the same seller the course simulates.
       // /x402/weather/report is the pre-rename path, kept as an alias so older agents still get the same 402.
