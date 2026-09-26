@@ -304,9 +304,35 @@ export class WorldCar extends CarMesh {
 
   override update(dt: number, speed: number, camera: THREE.Camera) {
     super.update(dt, speed, camera);
-    if (!this.gWheels.length) return;
-    const rot = (speed * dt) / (this.wheelR * CAR_SCALE);
+    // suspension bob while rolling (on top of the pose the sims / setStatic wrote this frame)
+    if (speed > 0.4) {
+      this.bobT += dt * (6 + speed * 0.9);
+      const k = Math.min(1, speed / 12);
+      this.chassis.position.y += 0.018 * k * Math.sin(this.bobT) + 0.008 * k * Math.sin(this.bobT * 2.7 + 1);
+      this.chassis.rotation.x = 0.006 * k * Math.sin(this.bobT * 1.3);
+    } else this.chassis.rotation.x = 0;
+    const rot = (speed * dt) / ((this.gWheels.length ? this.wheelR : 0.34) * CAR_SCALE);
     for (const w of this.gWheels) w.mesh.rotation.z -= rot;
+  }
+  private bobT = Math.random() * 10;
+
+  /** The mesh that carries the paint (Kenney body, or the v2 procedural shell). */
+  get bodyMesh(): THREE.Mesh {
+    return (this.gBody ?? this.body) as THREE.Mesh;
+  }
+  private sharedBodyMat?: THREE.Material;
+  /** Swap the body material (a per-car clone for burning / charring); null puts the shared one back. */
+  setBodyMaterial(m: THREE.Material | null) {
+    const mesh = this.bodyMesh;
+    this.sharedBodyMat ??= mesh.material as THREE.Material;
+    mesh.material = m ?? this.sharedBodyMat;
+  }
+  /** Back on the road after a biome death: upright, on its lane, visible. */
+  resetTransform(z: number) {
+    this.group.position.y = 0;
+    this.group.position.z = z;
+    this.group.rotation.set(0, 0, 0);
+    this.group.visible = true;
   }
 
   override dispose() {

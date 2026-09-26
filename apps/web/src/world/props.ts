@@ -88,7 +88,7 @@ export function buildProp(ob: TrackObstacle): THREE.Group {
     const k = `${type}:${price}`;
     let mat = kioskMats.get(k);
     if (!mat) {
-      mat = new THREE.MeshBasicMaterial({ map: kioskTexture(price, type === 'legit' ? 'x402 · weather' : 'cap $5 · World ID', type !== 'legit'), toneMapped: false });
+      mat = new THREE.MeshBasicMaterial({ map: kioskTexture(price, type === 'legit' ? 'GPU compute · $1' : 'cap $5 · World ID', type !== 'legit'), toneMapped: false });
       kioskMats.set(k, mat);
     }
     const screen = new THREE.Mesh(G.screen, mat);

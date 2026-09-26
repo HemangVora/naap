@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { concreteTexture, grassTexture } from './tex';
+import { VALLEY_Y } from './biomes/geo';
 
 export const HAZE = new THREE.Color('#e6dccb');
 
@@ -20,6 +21,7 @@ export function buildEnvironment(scene: THREE.Scene) {
       fragmentShader: `uniform vec3 top; uniform vec3 mid; uniform vec3 bottom; uniform vec3 sun; varying vec3 vDir;
         void main(){ float h = vDir.y; vec3 c = mix(bottom, mid, smoothstep(0.0, 0.12, h)); c = mix(c, top, smoothstep(0.12, 0.7, h));
         float s = max(0.0, dot(normalize(vDir), sun)); c += vec3(1.0,0.78,0.5) * (pow(s, 64.0) * 0.9 + pow(s, 6.0) * 0.18);
+        c = mix(c, vec3(1.0, 0.95, 0.82) * 1.6, smoothstep(0.99955, 0.9998, s));
         gl_FragColor = vec4(c, 1.0); }`,
     }),
   );
@@ -45,9 +47,9 @@ export function buildEnvironment(scene: THREE.Scene) {
   // grass everywhere, then a concrete apron under the plots (resized as tracks are added)
   const grassTex = grassTexture();
   grassTex.repeat.set(400, 400);
-  const grass = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshStandardMaterial({ map: grassTex, roughness: 1, color: 0xe6e6d6 }));
+  const grass = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshStandardMaterial({ map: grassTex, roughness: 1, color: 0xb9c29a }));
   grass.rotation.x = -Math.PI / 2;
-  grass.position.y = -0.05;
+  grass.position.y = VALLEY_Y; // v4: the plots stand on mesas; the lowland lies below
   grass.receiveShadow = true;
   scene.add(grass);
 
@@ -57,7 +59,53 @@ export function buildEnvironment(scene: THREE.Scene) {
   apron.rotation.x = -Math.PI / 2;
   apron.position.y = 0;
   apron.receiveShadow = true;
-  scene.add(apron);
+  apron.visible = false; // v4: the per-plot terrain replaces the concrete apron
+
+  // horizon: a ring of low-poly mountains with snow caps (unfogged, pre-hazed), and a lake in the lowland
+  {
+    const N = 56;
+    const base = new THREE.ConeGeometry(1, 1, 7, 1);
+    base.translate(0, 0.5, 0);
+    const cap = new THREE.ConeGeometry(0.34, 0.34, 7, 1);
+    cap.translate(0, 1 - 0.17 + 0.004, 0);
+    const rockM = new THREE.MeshStandardMaterial({ color: 0x8793a0, flatShading: true, roughness: 1, fog: false });
+    const snowM = new THREE.MeshStandardMaterial({ color: 0xf3f5f7, flatShading: true, roughness: 0.9, fog: false });
+    const ring = new THREE.InstancedMesh(base, rockM, N * 2);
+    const caps = new THREE.InstancedMesh(cap, snowM, N * 2);
+    const tint = new THREE.Color();
+    const mm = new THREE.Matrix4();
+    let k = 0;
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+    for (let layer = 0; layer < 2; layer++)
+      for (let i = 0; i < N; i++) {
+        const a = (i / N) * Math.PI * 2 + rnd() * 0.08 + layer * 0.05;
+        const r = (layer ? 1350 : 1080) + rnd() * 160;
+        const h = (layer ? 300 : 170) + rnd() * (layer ? 260 : 170);
+        const w = h * (0.9 + rnd() * 0.6);
+        mm.compose(new THREE.Vector3(Math.cos(a) * r, VALLEY_Y - 4, Math.sin(a) * r), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd() * 6, 0)), new THREE.Vector3(w, h, w * (0.8 + rnd() * 0.4)));
+        ring.setMatrixAt(k, mm);
+        caps.setMatrixAt(k, mm);
+        // aerial perspective: the far layer fades toward the haze
+        ring.setColorAt(k, tint.set(layer ? 0xa9b3ba : 0x7f8b96).lerp(HAZE, layer ? 0.35 : 0.12));
+        caps.setColorAt(k, tint.set(0xf3f5f7).lerp(HAZE, layer ? 0.25 : 0.05));
+        k++;
+      }
+    ring.frustumCulled = caps.frustumCulled = false;
+    scene.add(ring, caps);
+
+    const lake = new THREE.Mesh(new THREE.CircleGeometry(1, 40), new THREE.MeshStandardMaterial({ color: 0x5e8f99, roughness: 0.12, metalness: 0.3 }));
+    lake.rotation.x = -Math.PI / 2;
+    lake.scale.set(170, 110, 1);
+    lake.position.set(-360, VALLEY_Y + 0.3, 170);
+    lake.receiveShadow = true;
+    scene.add(lake);
+    const shore = new THREE.Mesh(new THREE.RingGeometry(1, 1.08, 40), new THREE.MeshStandardMaterial({ color: 0xcbb994, roughness: 1 }));
+    shore.rotation.x = -Math.PI / 2;
+    shore.scale.copy(lake.scale);
+    shore.position.set(-360, VALLEY_Y + 0.25, 170);
+    scene.add(shore);
+  }
 
   // light poles: instanced mast + head, placed along the far side of every road
   const poleGeo = new THREE.CylinderGeometry(0.16, 0.24, 14, 8);
@@ -112,6 +160,11 @@ export function buildEnvironment(scene: THREE.Scene) {
     crowd.setColorAt(i, palette[i % palette.length]);
   }
   stand.add(crowd);
+  // v4: the grandstand sits on a terrace that rises out of the lowland
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(W + 8, -VALLEY_Y, 22), new THREE.MeshStandardMaterial({ color: 0x9c9a90, roughness: 1, flatShading: true }));
+  plinth.position.set(0, VALLEY_Y / 2 - 0.02, 7);
+  plinth.receiveShadow = true;
+  stand.add(plinth);
   stand.rotation.y = Math.PI; // on the far edge, facing +z (the tracks and the default camera)
   scene.add(stand);
 
@@ -127,5 +180,5 @@ export function buildEnvironment(scene: THREE.Scene) {
     stand.position.set((apronBox.min.x + apronBox.max.x) / 2, 0, apronBox.min.z - 4);
   }
 
-  return { sun, hemi, addPole, fit };
+  return { sun, hemi, addPole, fit, sky };
 }

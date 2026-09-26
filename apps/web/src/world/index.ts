@@ -13,10 +13,19 @@ import { createHud } from '../hud';
 import { WorldCar, loadCarModels } from './car';
 import { buildEnvironment } from './env';
 import { NavCamera } from './nav';
+import { WorldAudio } from './audio';
+import { LANE_DZ, RUNUP_X } from './layout';
 import { MiniMap } from './minimap';
 import { tickProps } from './props';
 import { TrackView, type Slot } from './track';
 import { START_X, laneZ, slotZ } from './layout';
+import { fx } from './fx';
+import { BiomeWorld, DEATH_FOR } from './biomes';
+import { CliffFallSim, LavaSim, RockfallSim, WaterSim, type DeathSim } from './sims/deaths';
+
+const isDeath = (s: Sim | undefined): s is DeathSim => !!s && 'death' in s;
+const DIRT = new Set(['grok-morse', 'freysa', 'x402-swap', 'over-limit']);
+const DEATH_LABEL: Record<string, string> = { 'cliff-fall': 'over the cliff', lava: 'into the lava', water: 'into the river', rockfall: 'rockfall' };
 
 // NaAP World v3: an open proving ground. Every track is its own road on a plot; every car drives the track it picked, bare
 // and behind Sekisho, on its own lane pair. v2's crash / AEB sims, fixtures and high-speed-cam inset are reused as-is.
@@ -38,6 +47,17 @@ interface LaneActor {
   hitStopDone?: boolean;
   readout?: { at: number; text: string };
   smokeAcc: number;
+  /** v4: lane z, the biome death the car is lying in (until the run moves on), its burnt skin, fx throttles */
+  z0: number;
+  dead?: DeathSim;
+  skin?: THREE.Material;
+  engAcc: number;
+  dustAcc: number;
+  /** a death is still playing / the car is lying in it: move on (tow back) at this time, into this phase */
+  reviveAt?: number;
+  afterRevive?: Phase;
+  /** Rockfall Pass closed the road in front of this (Sekisho) car: it stays put, the run ends there */
+  blocked?: boolean;
 }
 interface CarActor {
   id: string;
@@ -87,7 +107,9 @@ export async function mountWorld(root: HTMLElement) {
     tour.stop();
     nav?.glideTo(p, 90);
   });
-  const hud = createHud(wrap, store, { mock, minimap: minimap.el, sub: 'open proving ground × sekisho 関所' });
+  const audio = new WorldAudio(); // nav + audio lane: WebAudio starts on the first gesture
+  const hints = '<b>Click</b> walk in · <b>WASD</b> move · <b>Space</b> jump · <b>Shift</b> sprint · <b>F</b> fly · <b>E</b> ride a car · <b>V</b> view · <b>M</b> sound';
+  const hud = createHud(wrap, store, { mock, minimap: minimap.el, sub: 'open proving ground × sekisho 関所', sound: audio, hints });
 
   let renderer: THREE.WebGLRenderer;
   try {
@@ -107,6 +129,7 @@ export async function mountWorld(root: HTMLElement) {
 
   const scene = new THREE.Scene();
   const env = buildEnvironment(scene);
+  const biomes = new BiomeWorld(scene, env.hemi);
   nav = new NavCamera(canvas);
   nav.resize(window.innerWidth, window.innerHeight);
   const hsCam = new HighSpeedCam();
@@ -179,7 +202,8 @@ export async function mountWorld(root: HTMLElement) {
     t = new TrackView(spec, tracks.size);
     scene.add(t.group);
     tracks.set(spec.id, t);
-    for (let x = -30; x < t.endX; x += 36) env.addPole(t.origin.x + x, t.origin.z - 8.4);
+    t.applyBiome(biomes.addTrack(t).propSpot);
+    for (let x = -30; x < t.endX; x += 36) if (biomes.groundAt(t.origin.x + x, t.origin.z - 8.4) > -0.3) env.addPole(t.origin.x + x, t.origin.z - 8.4);
     refit();
     t.setCounters(countersFrom());
     // keep the overview on every plot until a human takes the camera
@@ -216,10 +240,11 @@ export async function mountWorld(root: HTMLElement) {
   let currentReplay: Replay | null = null;
   let timeScale = 1;
   let hitStopTimer: number | undefined;
+  let baseScale = 1;
   const hitStop = (ms: number, scale = 0.05) => {
     timeScale = scale;
     window.clearTimeout(hitStopTimer);
-    hitStopTimer = window.setTimeout(() => (timeScale = 1), ms);
+    hitStopTimer = window.setTimeout(() => (timeScale = baseScale), ms);
   };
 
   function removeActor(id: string) {
@@ -261,7 +286,7 @@ export async function mountWorld(root: HTMLElement) {
       car.group.userData.carId = id;
       track.group.add(car.group);
       car.setStatic(START_X - 8);
-      return { variant, car, x: START_X - 8, targetX: START_X, speed: 0, maxSpeed: 12, phase: 'parked', finished: false, smokeAcc: 0 };
+      return { variant, car, x: START_X - 8, targetX: START_X, speed: 0, maxSpeed: 12, phase: 'parked', finished: false, smokeAcc: 0, z0: laneZ(sl.index, variant), engAcc: Math.random() * 0.1, dustAcc: 0 };
     };
     a = { id, track, slot: sl, joinedAt: performance.now(), lanes: { bare: mk('bare'), airbag: mk('airbag') }, skids: [], sims: [] };
     actors.set(id, a);
@@ -281,19 +306,90 @@ export async function mountWorld(root: HTMLElement) {
 
   function endSim(l: LaneActor) {
     if (!l.sim) return;
+    if (isDeath(l.sim)) {
+      settleDeath(l, l.sim);
+      return;
+    }
     if (l.sim instanceof CrashSim) l.sim.finish();
     l.sim.apply(l.sim.duration);
     l.x = l.car.group.position.x;
     l.sim = undefined;
     l.car.setStatic(l.x);
   }
+  /** A biome death ran out: the car lies where it fell (crumpled, maybe charred) until the run moves on. */
+  function settleDeath(l: LaneActor, s: DeathSim) {
+    s.apply(s.duration);
+    s.finish();
+    l.dead = s;
+    if (s.death === 'lava') l.skin = l.car.bodyMesh.material as THREE.Material;
+    l.x = l.car.group.position.x;
+    l.sim = undefined;
+    l.car.setStatic(l.x);
+  }
+  /** Towed back onto its lane past the hazard (the run continues after a biome death). */
+  function revive(l: LaneActor) {
+    endSim(l);
+    if (!l.dead) return;
+    l.x = Math.max(l.x, l.dead.exitX);
+    l.dead = undefined;
+    l.reviveAt = undefined;
+    l.car.resetTransform(l.z0);
+    l.car.setStatic(l.x);
+  }
   function restoreLane(l: LaneActor) {
+    if (l.dead && !l.sim) {
+      l.dead.apply(l.dead.duration);
+      l.dead.finish();
+      return;
+    }
+    if (l.sim && isDeath(l.sim)) {
+      l.sim.apply(l.sim.t);
+      return;
+    }
+    // a replay of an earlier death may have moved / re-skinned the car: put it back on its lane first
+    l.car.resetTransform(l.z0);
+    if (l.skin) l.car.setBodyMaterial(l.skin);
     if (l.sim) l.sim.apply(l.sim.t);
     else l.car.setStatic(l.x);
   }
+  const worldPt = (a: CarActor, x: number, y: number, z: number) => ({ x: a.track.origin.x + x, y, z: a.track.origin.z + z });
+  function gateFx(a: CarActor, step: number, state: 'open' | 'close' | 'amber') {
+    const g = a.slot.gates[step];
+    if (!g) return;
+    fx.emit({ t: 'gate', state, ...worldPt(a, g.group.position.x, 2, g.group.position.z) });
+  }
+  /** Bare lane falls for the biome's attack: cliff / lava / river, a deterministic sim the inset can replay. */
+  function startDeath(a: CarActor, l: LaneActor, kind: 'cliff-fall' | 'lava' | 'water', type: BarrierId) {
+    const sx = a.track.stationX(l.step ?? 0);
+    const Ctor = kind === 'cliff-fall' ? CliffFallSim : kind === 'lava' ? LavaSim : WaterSim;
+    const sim = new Ctor(a.track.group, l.car, l.x, l.z0, sx, () => restoreLane(l));
+    l.sim = sim;
+    l.phase = 'sim';
+    l.speed = 0;
+    a.sims.push(sim);
+    const loss = l.loss ?? 0;
+    fx.emit({ t: 'crash', carId: a.id, kind, ...worldPt(a, l.x, 0.5, l.z0), lossUsd: loss });
+    nav!.addTrauma(nav!.dist < 120 ? 0.3 : 0.1);
+    const at = lanePos(a, l, 4).add(new THREE.Vector3(0, 1.6, -3));
+    window.setTimeout(() => floater(loss > 0 ? `−${fmtUsd(loss)} · ${DEATH_LABEL[kind]}` : DEATH_LABEL[kind].toUpperCase(), at, 'red', 2200), 450);
+    replays.push({ sim, actor: a, side: -1, from: sim.replay.from, to: sim.replay.to, rate: sim.replay.rate, label: `${l.car.name} · ${BARRIER_SHORT[type]} · ${DEATH_LABEL[kind]}`, startWall: 0 });
+    tour.onCrash(a, l);
+  }
+  /** Rockfall Pass: boulders come down on the road (Sekisho refused the over-limit payment) or a few pebbles (bare paid). */
+  const rockfalls: { sim: DeathSim; a: CarActor; at: number; started: boolean; small: boolean; label: string }[] = [];
+  function queueRockfall(a: CarActor, l: LaneActor, xLand: number, delayMs: number, small: boolean) {
+    const entry = { sim: null as unknown as DeathSim, a, at: performance.now() + delayMs, started: false, small, label: `${l.car.name} · ${small ? 'paid without asking · rumble' : 'over-limit refused · rockfall'}` };
+    entry.sim = new RockfallSim(a.track.group, xLand, l.z0, () => entry.sim.apply(Math.min(Math.max(0, entry.sim.t), entry.sim.duration)), { small });
+    entry.sim.t = 0;
+    entry.sim.apply(0);
+    a.sims.push(entry.sim);
+    rockfalls.push(entry);
+    if (!small) l.blocked = true;
+  }
   function startAeb(a: CarActor, l: LaneActor, xStop: number, v: number, decel: number, label: string, readout: string) {
-    endSim(l);
+    revive(l);
     const sim = new AebSim(l.car, l.x, xStop, v, decel, l.car.group.position.z, () => restoreLane(l));
+    fx.emit({ t: 'aeb', carId: a.id, ...worldPt(a, xStop, 0.5, l.z0) });
     l.sim = sim;
     l.phase = 'sim';
     l.speed = 0;
@@ -338,6 +434,7 @@ export async function mountWorld(root: HTMLElement) {
         spawn(e.car.id);
         break;
       case 'report':
+        fx.emit({ t: 'report', carId: e.carId });
         if (e.report) showReport(e.report, following === e.carId);
         break;
       case 'run.started': {
@@ -346,18 +443,24 @@ export async function mountWorld(root: HTMLElement) {
         l.targetX = START_X + 2;
         l.phase = 'approach';
         l.finished = false;
+        l.blocked = false;
         a.leaveAt = undefined;
         break;
       }
       case 'barrier.enter': {
         const a = spawn(e.carId);
         const l = a.lanes[e.variant];
-        endSim(l);
+        const dying = isDeath(l.sim) || !!l.dead;
+        if (!dying) revive(l);
         clearStation(a, l);
         l.step = stepOf(e.carId, e.variant, e.step);
         l.targetX = a.track.stationX(l.step) - APPROACH_GAP;
         l.maxSpeed = 13;
-        l.phase = l.x < l.targetX - 0.5 ? 'approach' : 'creep';
+        if (dying) {
+          // let the death play out, lie there a beat, then tow back onto the lane
+          l.reviveAt = performance.now() + (isDeath(l.sim) ? Math.max(0, l.sim.duration - l.sim.t) * 1000 : 0) + 1400;
+          l.afterRevive = 'approach';
+        } else l.phase = l.x < l.targetX - 0.5 ? 'approach' : 'creep';
         a.track.lastActivity = performance.now();
         break;
       }
@@ -366,6 +469,7 @@ export async function mountWorld(root: HTMLElement) {
         const g = a.slot.gates[stepOf(e.carId, 'airbag', e.step)];
         if (!g) break;
         g.setState('stepup', e.summary, e.canApprove ? ['CAP·TX', 'WORLD ID'] : ['CAP·TX', 'NO OWNER']);
+        gateFx(a, stepOf(e.carId, 'airbag', e.step), 'amber');
         g.startStepUp(Date.now(), e.expiresAt * 1000);
         floater('STEP UP · World ID', lanePos(a, a.lanes.airbag, 1), 'amber');
         break;
@@ -378,6 +482,7 @@ export async function mountWorld(root: HTMLElement) {
         if (!g) break;
         if (e.result.status === 'APPROVED') g.setState('paid', `Owner approved via World ID${e.result.subject ? ` · ${e.result.subject}` : ''}`, ['WORLD ✓']);
         else g.setState('expired', e.result.detail, [e.result.status === 'DENIED' ? 'WORLD·DENIED' : 'WORLD·EXPIRED']);
+        gateFx(a, l.step, e.result.status === 'APPROVED' ? 'open' : 'close');
         break;
       }
       case 'barrier.result': {
@@ -393,11 +498,11 @@ export async function mountWorld(root: HTMLElement) {
           const f = a.slot.bare[step];
           if (!f) break;
           if (r.outcome === 'CRASH') {
-            endSim(l);
+            revive(l);
             const faceX = f instanceof Barrier ? f.faceX : sx - 0.3;
             l.phase = 'charging';
             l.maxSpeed = V_CRASH;
-            l.targetX = faceX - noseLen(l.car);
+            l.targetX = DEATH_FOR[r.barrierId] ? Math.max(l.x + 0.5, sx - 2) : faceX - noseLen(l.car);
             l.loss = r.lossUsd;
           } else if (r.outcome === 'SAFE' && attack && f instanceof Barrier) {
             startAeb(a, l, f.faceX - 0.45 - noseLen(l.car), 14, 11, `${l.car.name} · ${BARRIER_SHORT[r.barrierId]} · agent declined`, 'agent declined · stopped 0.4 m short');
@@ -407,7 +512,13 @@ export async function mountWorld(root: HTMLElement) {
             l.phase = 'through';
             l.maxSpeed = 13;
             l.targetX = sx + 6;
-            if (r.outcome === 'PAID') floater(r.barrierId === 'over-limit' ? 'paid without asking' : `+ weather report ${fmtUsd(1)}`, lanePos(a, l, 2), r.barrierId === 'over-limit' ? 'amber' : 'green');
+            if (r.outcome === 'PAID') floater(r.barrierId === 'over-limit' ? 'PAID WITHOUT ASKING' : `+ 1 h GPU inference ${fmtUsd(1)}`, lanePos(a, l, 2), r.barrierId === 'over-limit' ? 'amber' : 'green', r.barrierId === 'over-limit' ? 2600 : 1100);
+            if (r.outcome === 'PAID' && r.barrierId === 'over-limit') {
+              // the pass rumbles: pebbles rain down ahead of the car that paid without asking
+              queueRockfall(a, l, sx + 3, 350, true);
+              nav!.addTrauma(nav!.dist < 120 ? 0.18 : 0.05);
+            }
+            if (!(f instanceof Barrier) && r.outcome === 'PAID') fx.emit({ t: 'gate', state: 'open', ...worldPt(a, sx, 2, l.z0) });
             else if (r.outcome === 'SAFE') floater('agent declined', lanePos(a, l, 1), 'green');
             else floater('FALSE BLOCK', lanePos(a, l, 1), 'amber');
           }
@@ -417,12 +528,14 @@ export async function mountWorld(root: HTMLElement) {
           const target = a.slot.targets[step];
           const chips = chipsFor(r.blockedBy);
           if (r.outcome === 'PAID') {
-            g.setState('paid', r.barrierId === 'over-limit' ? r.reason : `Paid ${fmtUsd(1)} · weather.naap.eth`, r.barrierId === 'over-limit' ? ['WORLD ✓', 'PAID'] : ['PAID']);
+            g.setState('paid', r.barrierId === 'over-limit' ? r.reason : `Paid ${fmtUsd(1)} · compute.naap.eth`, r.barrierId === 'over-limit' ? ['WORLD ✓', 'PAID'] : ['PAID']);
             target?.raise(true);
+            gateFx(a, step, 'open');
+            revive(l);
             l.phase = 'through';
             l.maxSpeed = 13;
             l.targetX = sx + 6;
-            floater(r.barrierId === 'over-limit' ? '+ 7-day forecast' : `+ weather report ${fmtUsd(1)}`, lanePos(a, l, 2), 'green');
+            floater(r.barrierId === 'over-limit' ? '+ 40 h GPU block' : `+ 1 h GPU inference ${fmtUsd(1)}`, lanePos(a, l, 2), 'green');
           } else if (r.outcome === 'CRASH') {
             g.setState('safe', r.reason, chips);
             endSim(l);
@@ -432,9 +545,12 @@ export async function mountWorld(root: HTMLElement) {
             l.loss = r.lossUsd;
           } else {
             g.setState(r.outcome === 'FALSE_BLOCK' ? 'false_block' : 'safe', r.reason, chips);
+            gateFx(a, step, 'close');
             const stopNose = target ? target.rearX - 0.8 : sx - 0.7;
             const gap = target ? 0.8 : 0.7;
             startAeb(a, l, stopNose - noseLen(l.car), 12.5, 9.5, `${l.car.name} · ${BARRIER_SHORT[r.barrierId]} · AEB`, `AEB · stopped ${gap.toFixed(1)} m short`);
+            // over-limit refused (step-up expired / denied): the pass comes down in front of the stopped car — a SAFE result
+            if (r.barrierId === 'over-limit' && r.outcome === 'SAFE') queueRockfall(a, l, stopNose + 2.2, 900, false);
           }
         }
         break;
@@ -442,7 +558,8 @@ export async function mountWorld(root: HTMLElement) {
       case 'run.finished': {
         const a = spawn(e.carId);
         const l = a.lanes[e.variant];
-        endSim(l);
+        const dying = isDeath(l.sim) || !!l.dead;
+        if (!dying) revive(l);
         if (l.step !== undefined) {
           if (e.variant === 'bare') {
             const f = a.slot.bare[l.step];
@@ -453,10 +570,17 @@ export async function mountWorld(root: HTMLElement) {
             a.slot.targets[l.step]?.raise(true);
           }
         }
-        l.phase = 'exit';
         l.maxSpeed = 14;
         l.targetX = a.track.endX;
         l.finished = true;
+        if (l.blocked) {
+          // the pass is closed: the refused car stays behind the boulders
+          l.phase = 'waiting';
+          l.targetX = l.x;
+        } else if (dying) {
+          l.reviveAt = performance.now() + (isDeath(l.sim) ? Math.max(0, l.sim.duration - l.sim.t) * 1000 : 0) + 1400;
+          l.afterRevive = 'exit';
+        } else l.phase = 'exit';
         break;
       }
       default:
@@ -465,6 +589,13 @@ export async function mountWorld(root: HTMLElement) {
   }
 
   function impact(a: CarActor, l: LaneActor) {
+    const bt = l.step !== undefined ? a.track.type(l.step) : undefined;
+    const death = l.variant === 'bare' && bt ? DEATH_FOR[bt] : undefined;
+    if (bt && (death === 'cliff-fall' || death === 'lava' || death === 'water')) {
+      startDeath(a, l, death, bt);
+      return;
+    }
+    fx.emit({ t: 'crash', carId: a.id, kind: 'wall', ...worldPt(a, l.x, 0.5, l.z0), lossUsd: l.loss ?? 0 });
     const barrier = l.step !== undefined ? a.slot.bare[l.step] : null;
     const c0 = l.car.crush;
     const c1 = Math.min(1, c0 + 0.62);
@@ -487,13 +618,26 @@ export async function mountWorld(root: HTMLElement) {
     tour.onCrash(a, l);
   }
 
+  function cue(a: CarActor, c: { kind: string; x: number; y: number; z: number }, death?: string) {
+    const p = worldPt(a, c.x, c.y, c.z);
+    if (c.kind === 'splash') fx.emit({ t: 'splash', ...p });
+    else if (c.kind === 'sizzle') fx.emit({ t: 'sizzle', ...p });
+    else if (c.kind === 'rumble') {
+      nav!.addTrauma(nav!.dist < 120 ? 0.22 : 0.06);
+      // the thud where the eye is: the car hits the scree 16 m below the rail
+      if (death === 'cliff-fall') fx.emit({ t: 'crash', carId: a.id, kind: 'cliff-fall', ...p, lossUsd: 0 });
+    }
+    else if (c.kind === 'dust') for (let k = 0; k < 4; k++) biomes.dust.puff(p.x, p.y + 0.3, p.z, 2.2, 1.2, 1.8);
+  }
+
   // ── navigation: click car → chase, click sign → frame track, dbl-click → glide, Esc → overview, idle → auto-tour ──
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
   const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   const pick = (ev: MouseEvent) => {
     const r = canvas.getBoundingClientRect();
-    ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+    if (nav!.locked) ndc.set(0, 0); // walking: the crosshair
+    else ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
     raycaster.setFromCamera(ndc, nav!.camera);
   };
   let following = '';
@@ -517,12 +661,14 @@ export async function mountWorld(root: HTMLElement) {
       this.on = true;
       this.next = 0;
       tourPill.style.display = '';
+      nav!.setView('tour', false);
     },
     stop() {
       if (!this.on) return;
       this.on = false;
       this.cutUntil = 0;
       tourPill.style.display = 'none';
+      if (nav!.view === 'tour') nav!.setView('orbit', false);
     },
     onCrash(a: CarActor, l: LaneActor) {
       if (!this.on || performance.now() < this.cutUntil) return;
@@ -560,23 +706,26 @@ export async function mountWorld(root: HTMLElement) {
 
   let downAt = { x: 0, y: 0 };
   canvas.addEventListener('pointerdown', (e) => (downAt = { x: e.clientX, y: e.clientY }));
+  /** Ride along with the car under the ray (click, or E at the crosshair while walking). */
+  const rideAt = (ray: THREE.Raycaster) => {
+    const carObjs: THREE.Object3D[] = [];
+    for (const a of actors.values()) for (const v of ['bare', 'airbag'] as const) carObjs.push(a.lanes[v].car.group);
+    const hitCar = ray.intersectObjects(carObjs, true).find((h) => h.object.visible);
+    if (!hitCar) return false;
+    let o: THREE.Object3D | null = hitCar.object;
+    while (o && o.userData.carId === undefined) o = o.parent;
+    const a = o ? actors.get(o.userData.carId as string) : undefined;
+    if (!a) return false;
+    followCar(a, a.lanes.bare.car.group === o ? a.lanes.bare : a.lanes.airbag, 17, true);
+    return true;
+  };
   canvas.addEventListener('click', (e) => {
+    if (nav!.consumeClick()) return; // walking but paused: the click resumes
     if (Math.abs(e.clientX - downAt.x) + Math.abs(e.clientY - downAt.y) > 5) return;
     tour.stop();
     nav!.lastInput = performance.now();
     pick(e);
-    const carObjs: THREE.Object3D[] = [];
-    for (const a of actors.values()) for (const v of ['bare', 'airbag'] as const) carObjs.push(a.lanes[v].car.group);
-    const hitCar = raycaster.intersectObjects(carObjs, true).find((h) => h.object.visible);
-    if (hitCar) {
-      let o: THREE.Object3D | null = hitCar.object;
-      while (o && o.userData.carId === undefined) o = o.parent;
-      const a = o ? actors.get(o.userData.carId as string) : undefined;
-      if (a) {
-        followCar(a, a.lanes.bare.car.group === o ? a.lanes.bare : a.lanes.airbag, 17, true);
-        return;
-      }
-    }
+    if (rideAt(raycaster)) return;
     const signs: THREE.Object3D[] = [];
     for (const t of tracks.values()) signs.push(...t.pickables);
     const hitSign = raycaster.intersectObjects(signs, true)[0];
@@ -596,6 +745,12 @@ export async function mountWorld(root: HTMLElement) {
     }
   });
   const onKey = (e: KeyboardEvent) => {
+    const tag = (e.target as HTMLElement)?.tagName;
+    if (e.code === 'KeyM' && tag !== 'INPUT' && tag !== 'TEXTAREA') audio.toggle();
+    if (e.key === 'Escape' && nav!.view === 'walk') {
+      hideReport(); // walking: Esc only frees the mouse (nav)
+      return;
+    }
     if (e.key === 'Escape') {
       hideReport();
       following = '';
@@ -609,6 +764,45 @@ export async function mountWorld(root: HTMLElement) {
     touched = true;
     tour.stop();
   };
+  // nav + audio lane wiring: spawn deck, biome lookup, crosshair ride, views, gesture → audio, footsteps
+  const biomeBox = new THREE.Box3();
+  nav.attach({
+    scene,
+    spawn: () => {
+      const t = tracks.get(DEFAULT_TRACK_ID) ?? [...tracks.values()][0];
+      return t ? { x: t.origin.x + RUNUP_X - 16, z: t.origin.z - LANE_DZ / 2, yaw: -Math.PI / 2 } : null;
+    },
+    biomeAt: (x, z) => {
+      let best: TrackView | null = null;
+      let bd = Infinity;
+      for (const t of tracks.values()) {
+        const b = t.bounds(biomeBox);
+        const d = Math.hypot(Math.max(b.min.x - x, 0, x - b.max.x), Math.max(b.min.z - z, 0, z - b.max.z));
+        if (d < bd) {
+          bd = d;
+          best = t;
+        }
+      }
+      if (!best || bd > 40) return null;
+      let i = 0;
+      let id = Infinity;
+      for (let k = 0; k < best.n; k++) {
+        const d = Math.abs(best.origin.x + best.stationX(k) - x);
+        if (d < id) {
+          id = d;
+          i = k;
+        }
+      }
+      return best.type(i);
+    },
+    use: (ray) => rideAt(ray),
+    onView: (v) => (v === 'tour' ? tour.start() : tour.stop()),
+    onGesture: () => audio.unlock(),
+    onStep: (s, sprint) => audio.footstep(s, sprint),
+    onLand: (v) => audio.land(v),
+  });
+  audio.attach(nav.camera);
+  minimap.player = () => nav!.marker();
 
   // debug / screenshot hooks
   const api = {
@@ -617,6 +811,28 @@ export async function mountWorld(root: HTMLElement) {
       if (a) followCar(a, a.lanes[variant], 17, true);
     },
     overview: () => frameAll(),
+    /** v4: slow the sims down (screenshots): 1 = real time */
+    slow(k: number) {
+      window.clearTimeout(hitStopTimer);
+      timeScale = baseScale = k;
+    },
+    /** v4: world-space ground height (terrain of the plot under the point, else the lowland) — for walkers */
+    ground: (x: number, z: number) => biomes.groundAt(x, z),
+    /** v4: frame obstacle `step` of track `trackId` (screenshots) */
+    biome(trackId: string, step: number, yaw = 0.35, pitch = 0.5, pad = 1.0) {
+      const t = tracks.get(trackId) ?? [...tracks.values()][0];
+      if (!t) return;
+      const sx = t.origin.x + t.stationX(step);
+      touched = true;
+      nav!.frameBox(new THREE.Box3(new THREE.Vector3(sx - 10, -8, t.origin.z - 24), new THREE.Vector3(sx + 18, 8, t.origin.z + 6)), { pitch, yaw, pad: 1 });
+      // pad = orbit distance (m): snap straight there for screenshots
+      nav!.goal.target.set(sx + 4, 0, t.origin.z - 8);
+      nav!.goal.dist = pad * 40;
+      nav!.target.copy(nav!.goal.target);
+      nav!.yaw = yaw;
+      nav!.pitch = pitch;
+      nav!.dist = nav!.goal.dist;
+    },
     tour: () => tour.start(),
     fps: () => (window as unknown as { __worldFps?: number }).__worldFps,
   };
@@ -662,8 +878,22 @@ export async function mountWorld(root: HTMLElement) {
       for (const v of ['bare', 'airbag'] as const) {
         const l = a.lanes[v];
         if (l.sim) {
+          const t0 = l.sim.t;
           l.sim.t += dt;
           const s = l.sim;
+          if (isDeath(s)) {
+            for (const c of s.cues) if (c.t > t0 && c.t <= s.t) cue(a, c, s.death);
+            if (s.t >= s.duration) {
+              settleDeath(l, s);
+              l.phase = 'waiting';
+              l.car.setIdle(false);
+              l.car.update(dt, 0, nav!.camera);
+              continue;
+            }
+            s.apply(s.t);
+            l.car.update(dt, 0, nav!.camera);
+            continue;
+          }
           s.apply(Math.min(s.t, s.duration));
           if (s instanceof CrashSim && !l.hitStopDone && s.t >= 0.11) {
             l.hitStopDone = true;
@@ -688,6 +918,15 @@ export async function mountWorld(root: HTMLElement) {
             l.phase = 'waiting';
             if (s instanceof CrashSim) s.finish();
             l.sim = undefined;
+            l.car.setStatic(l.x);
+          }
+        } else if (l.dead) {
+          l.speed = 0;
+          if (l.reviveAt !== undefined && now >= l.reviveAt) {
+            revive(l);
+            l.reviveAt = undefined;
+            const ph = l.afterRevive ?? 'waiting';
+            l.phase = ph === 'approach' ? (l.x < l.targetX - 0.5 ? 'approach' : 'creep') : ph;
             l.car.setStatic(l.x);
           }
         } else {
@@ -715,9 +954,25 @@ export async function mountWorld(root: HTMLElement) {
           } else l.speed = 0;
           l.car.setStatic(l.x);
         }
-        if (l.finished && l.phase === 'exit' && l.x >= a.track.endX - 0.1) done++;
-        l.car.setIdle(l.phase === 'waiting' || l.phase === 'parked' || l.phase === 'creep');
+        if (l.finished && ((l.blocked && !l.sim) || (l.phase === 'exit' && l.x >= a.track.endX - 0.1))) done++;
+        l.car.setIdle(!l.dead && (l.phase === 'waiting' || l.phase === 'parked' || l.phase === 'creep'));
         l.car.update(dt, l.speed, nav!.camera);
+        // fx: engine hum (≈10 Hz per moving car), dust trail on the dirt biomes
+        l.engAcc += wallDt;
+        const moving = l.speed > 0.05;
+        if (!l.dead && l.engAcc >= (moving ? 0.1 : 0.5)) {
+          // ≈10 Hz while moving, 2 Hz idle rumble while parked / waiting
+          l.engAcc = 0;
+          fx.emit({ t: 'engine', carId: a.id, variant: v, ...worldPt(a, l.car.group.position.x, 0.5, l.z0), speed: moving ? l.speed : 0 });
+        }
+        if (l.speed > 3 && !l.dead) {
+          l.dustAcc += wallDt;
+          if (l.dustAcc > 0.05 && DIRT.has(biomes.typeAt(a.track, l.car.group.position.x))) {
+            l.dustAcc = 0;
+            const p = worldPt(a, l.car.group.position.x - 0.2, 0.25, l.z0);
+            biomes.dust.puff(p.x, p.y, p.z + (Math.random() - 0.5) * 1.2, 0.7 + l.speed * 0.04, 0.5, 1.1);
+          }
+        }
       }
       // the car leaves (crumpled or not) a while after both lanes reached the finish
       if (done === 2 && a.leaveAt === undefined) a.leaveAt = now + 9000;
@@ -738,10 +993,35 @@ export async function mountWorld(root: HTMLElement) {
       sc.updateProjectionMatrix();
     }
     env.sun.target.position.set(nav!.target.x, 0, nav!.target.z);
-    env.sun.position.set(nav!.target.x + 160, 110, nav!.target.z + 150);
+    env.sun.position.set(nav!.target.x + 120, 210, nav!.target.z + 95); // v4: higher sun, the biome walls must not black out the road
 
     for (const t of tracks.values()) t.update(dt, clock, nav!.camera.position.distanceTo(tmpV.set(t.origin.x + t.endX / 2, 0, t.origin.z)));
     tickProps(clock);
+    biomes.update(dt, clock, nav!.camera);
+    for (let i = rockfalls.length - 1; i >= 0; i--) {
+      const r = rockfalls[i];
+      if (!r.a.sims.includes(r.sim)) {
+        rockfalls.splice(i, 1);
+        continue;
+      }
+      if (!r.started) {
+        if (now < r.at) continue;
+        r.started = true;
+        if (!r.small) {
+          fx.emit({ t: 'crash', carId: r.a.id, kind: 'rockfall', ...worldPt(r.a, r.sim.focusX, 1, r.sim.laneZ), lossUsd: 0 });
+          replays.push({ sim: r.sim, actor: r.a, side: 1, from: r.sim.replay.from, to: r.sim.replay.to, rate: r.sim.replay.rate, label: r.label, startWall: 0 });
+          nav!.addTrauma(nav!.dist < 120 ? 0.25 : 0.08);
+        }
+      }
+      const t0 = r.sim.t;
+      r.sim.t = Math.min(r.sim.duration, r.sim.t + dt);
+      for (const c of r.sim.cues) if (c.t > t0 && c.t <= r.sim.t) cue(r.a, c);
+      r.sim.apply(r.sim.t);
+      if (r.sim.t >= r.sim.duration) {
+        r.sim.finish();
+        rockfalls.splice(i, 1);
+      }
+    }
     smoke.update(dt);
     if (countersDirty) {
       countersDirty = false;
@@ -787,7 +1067,8 @@ export async function mountWorld(root: HTMLElement) {
         r.sim.apply(tR);
         const fx = r.sim.focusX + r.actor.track.origin.x;
         const fz = r.sim.laneZ + r.actor.track.origin.z;
-        if (r.sim.kind === 'crash' && r.side < 0) {
+        if (isDeath(r.sim)) r.sim.aim(hsCam.camera, tR, r.actor.track.origin.x, r.actor.track.origin.z);
+        else if (r.sim.kind === 'crash' && r.side < 0) {
           // wider low 3/4 rig than v2: the Kenney bodies are chunkier, keep the honeycomb face in frame
           hsCam.camera.position.set(fx - 6.8, 1.9, fz - 5.6);
           hsCam.camera.lookAt(fx - 0.6, 0.8, fz);

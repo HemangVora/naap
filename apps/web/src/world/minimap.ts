@@ -28,13 +28,16 @@ export class MiniMap {
   private plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private hit = new THREE.Vector3();
   private ndc = new THREE.Vector2();
+  private tmpP = new THREE.Vector3();
+  /** the local player (nav.marker()): drawn as an arrow with heading; walking hides the camera footprint */
+  player: (() => { x: number; z: number; heading: number; walk: boolean } | null) | null = null;
 
   constructor(onPick: (p: THREE.Vector3) => void) {
     this.c = el('canvas');
     this.c.width = 440;
     this.c.height = 300;
     this.g = this.c.getContext('2d')!;
-    this.el = el('div', { class: 'minimap' }, this.c, el('div', { class: 'mm-hint', text: 'drag · scroll · WASD · click a car' }));
+    this.el = el('div', { class: 'minimap' }, this.c, el('div', { class: 'mm-hint', text: 'you = arrow · click the map to go there · V view' }));
     this.c.addEventListener('click', (e) => {
       const r = this.c.getBoundingClientRect();
       const px = ((e.clientX - r.left) / r.width) * this.c.width;
@@ -49,6 +52,8 @@ export class MiniMap {
     const H = this.c.height;
     this.bounds.makeEmpty();
     for (const t of tracks) this.bounds.union(t.box);
+    const me = this.player?.() ?? null;
+    if (me?.walk && !this.bounds.isEmpty()) this.bounds.expandByPoint(this.tmpP.set(me.x, 0, me.z));
     if (this.bounds.isEmpty()) this.bounds.set(new THREE.Vector3(-100, 0, -50), new THREE.Vector3(100, 0, 50));
     const pad = 16;
     const bw = this.bounds.max.x - this.bounds.min.x;
@@ -74,7 +79,56 @@ export class MiniMap {
       g.textBaseline = 'bottom';
       g.fillText(t.name.slice(0, 22), X(t.box.min.x) + 3, Z(zr) - 2);
     }
-    // camera footprint
+    // camera footprint (overview views)
+    if (!me?.walk) this.footprint(camera, X, Z);
+    for (const c of cars) {
+      g.fillStyle = c.color;
+      g.beginPath();
+      g.arc(X(c.x), Z(c.z), 6, 0, Math.PI * 2);
+      g.fill();
+      g.lineWidth = 2;
+      g.strokeStyle = c.crashed ? '#e2412b' : '#0d0e11';
+      g.stroke();
+    }
+    if (me) this.arrow(X(me.x), Z(me.z), me.heading, me.walk);
+  }
+
+  /** Player arrow: points along the view (forward = (−sin yaw, −cos yaw) in x/z). */
+  private arrow(px: number, py: number, heading: number, walk: boolean) {
+    const g = this.g;
+    const fx = -Math.sin(heading);
+    const fz = -Math.cos(heading);
+    const rx = -fz;
+    const rz = fx;
+    const L = walk ? 15 : 11;
+    const Wd = walk ? 8 : 6;
+    g.save();
+    if (walk) {
+      // view cone
+      g.fillStyle = 'rgba(245,196,0,0.18)';
+      g.beginPath();
+      g.moveTo(px, py);
+      g.lineTo(px + (fx * 3 + rx * 1.6) * 16, py + (fz * 3 + rz * 1.6) * 16);
+      g.lineTo(px + (fx * 3 - rx * 1.6) * 16, py + (fz * 3 - rz * 1.6) * 16);
+      g.closePath();
+      g.fill();
+    }
+    g.beginPath();
+    g.moveTo(px + fx * L, py + fz * L);
+    g.lineTo(px - fx * L * 0.55 + rx * Wd, py - fz * L * 0.55 + rz * Wd);
+    g.lineTo(px - fx * L * 0.25, py - fz * L * 0.25);
+    g.lineTo(px - fx * L * 0.55 - rx * Wd, py - fz * L * 0.55 - rz * Wd);
+    g.closePath();
+    g.fillStyle = walk ? '#f5c400' : 'rgba(242,239,232,0.85)';
+    g.fill();
+    g.lineWidth = 2;
+    g.strokeStyle = '#0d0e11';
+    g.stroke();
+    g.restore();
+  }
+
+  private footprint(camera: THREE.PerspectiveCamera, X: (x: number) => number, Z: (z: number) => number) {
+    const g = this.g;
     const pts: THREE.Vector3[] = [];
     for (const [x, y] of [
       [-1, -1],
@@ -101,14 +155,5 @@ export class MiniMap {
     g.closePath();
     g.fill();
     g.stroke();
-    for (const c of cars) {
-      g.fillStyle = c.color;
-      g.beginPath();
-      g.arc(X(c.x), Z(c.z), 6, 0, Math.PI * 2);
-      g.fill();
-      g.lineWidth = 2;
-      g.strokeStyle = c.crashed ? '#e2412b' : '#0d0e11';
-      g.stroke();
-    }
   }
 }

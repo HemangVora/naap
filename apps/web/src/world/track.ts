@@ -4,6 +4,7 @@ import { ATTACK_TYPES, BARRIER_INCIDENT } from '../types';
 import { Barrier, Gate, SoftTarget } from '../arena/fixtures';
 import { asphaltTexture, dashTexture, drawCounter, gantryTexture, kerbTexture, roadNameTexture, grassTexture } from './tex';
 import { buildProp } from './props';
+import { DEATH_FOR } from './biomes/geo';
 import { LANE_DZ, MAX_SLOTS, PROP_Z, RUNUP_X, START_X, endX, laneZ, plotOrigin, slotZ, stationX } from './layout';
 
 const Mat = {
@@ -52,6 +53,7 @@ interface Counter {
   canvas: HTMLCanvasElement;
   tex: THREE.CanvasTexture;
   last: string;
+  step: number;
 }
 
 /** One track = one road on its plot: run-up with the painted name, gantry sign, lane pairs (slots), obstacles with props + counters. */
@@ -101,8 +103,10 @@ export class TrackView {
     const x1 = this.endX + 6;
     const len = x1 - x0;
     const cx = (x0 + x1) / 2;
-    // far verge (props stand here) + near verge
-    g.add(flat(len + 8, 10, vergeMat(), cx, -LANE_DZ - 2.2 - 5.2, 0.015, [len / 6, 10 / 6]));
+    // v4: the plot's biome terrain (biomes/terrain.ts) replaces the flat far verge
+    void vergeMat;
+    void len;
+    void cx;
     // gantry sign over the run-up, spanning slot 0
     const gx = START_X - 6;
     const zA = 2.6;
@@ -148,6 +152,7 @@ export class TrackView {
       const p = buildProp(ob);
       p.position.set(this.stationX(i) + 2, 0, PROP_Z);
       g.add(p);
+      this.props[i] = p;
       this.pickables.push(p);
       if (ATTACK_TYPES.includes(ob.type) || ob.type === 'over-limit') {
         const c = document.createElement('canvas');
@@ -162,11 +167,25 @@ export class TrackView {
         sprite.position.set(this.stationX(i) + 2, ob.type === 'freysa' ? 12.4 : 10.4, PROP_Z);
         sprite.renderOrder = 8;
         g.add(sprite);
-        this.counters.push({ type: ob.type, sprite, canvas: c, tex, last: '' });
+        this.counters.push({ type: ob.type, sprite, canvas: c, tex, last: '', step: i });
       }
     });
   }
   private flags: THREE.Mesh[] = [];
+  props: THREE.Object3D[] = [];
+
+  /** v4: move each obstacle's prop (and its counter) to where its biome wants it (a spire, an island, a canyon wall). */
+  applyBiome(spot: (i: number) => { x: number; y: number; z: number; rotY: number } | null) {
+    this.props.forEach((p, i) => {
+      const s = spot(i);
+      if (!s) return;
+      p.position.set(s.x, s.y, s.z);
+      p.rotation.y = s.rotY;
+      const c = this.counters.find((k) => k.step === i);
+      if (c) c.sprite.position.set(s.x, s.y + (this.spec.obstacles[i].type === 'freysa' ? 12.4 : 10.4), s.z);
+    });
+    for (const c of this.counters) if (c.type === 'over-limit') c.sprite.position.y = Math.max(c.sprite.position.y, 19);
+  }
 
   /** Update the floating "fooled a/b" counters from Stats (by obstacle type). */
   setCounters(by: Map<BarrierId, { attempts: number; fooled: number }>) {
@@ -238,6 +257,8 @@ export class TrackView {
         slot.targets[i] = t;
         this.updatables.push(t);
         const b = new Barrier(x, laneZ(k, 'bare'));
+        // v4: the bare lane's hazard is the biome itself (cliff / lava ramp / broken bridge), not a crash wall
+        if (DEATH_FOR[ob.type]) b.group.visible = false;
         g.add(b.group);
         slot.bare[i] = b;
         this.updatables.push(b);

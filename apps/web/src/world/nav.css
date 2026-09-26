@@ -1,0 +1,67 @@
+/* NaAP World v4 navigation + sound UI (nav lane). Palette tokens from styles.css. */
+
+/* the empty middle grid cell of the HUD must not swallow clicks meant for the canvas */
+.world .hud > :nth-child(3) { pointer-events: none; }
+
+.nav-enter { position: absolute; left: 50%; top: 122px; transform: translateX(-50%); z-index: 6;
+  display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer;
+  background: rgba(13, 14, 17, 0.86); color: var(--text); border: 2px solid var(--yellow); border-radius: 10px;
+  padding: 6px 18px 6px; font-family: var(--display); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); }
+.nav-enter b { font-size: 21px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.nav-enter b::before { content: ''; display: inline-block; width: 0; height: 0; margin-right: 10px; vertical-align: 2px;
+  border-left: 14px solid var(--yellow); border-top: 9px solid transparent; border-bottom: 9px solid transparent; }
+.nav-enter small { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.02em; }
+body.nav-view-tour .nav-enter:not(.resume) { top: 150px; }
+.nav-enter:hover { background: rgba(13, 14, 17, 0.95); }
+.nav-enter.resume { top: 50%; bottom: auto; transform: translate(-50%, -50%); padding: 18px 30px 16px; }
+.nav-enter.resume b { font-size: 34px; }
+
+.nav-cross { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; transform: translate(-50%, -50%);
+  pointer-events: none; z-index: 5; }
+.nav-cross::before, .nav-cross::after { content: ''; position: absolute; background: var(--text);
+  box-shadow: 0 0 0 1px rgba(13, 14, 17, 0.7); }
+.nav-cross::before { left: 10px; top: 0; width: 2px; height: 22px; }
+.nav-cross::after { top: 10px; left: 0; height: 2px; width: 22px; }
+
+.nav-tag { position: absolute; left: 50%; top: 58%; transform: translateX(-50%); z-index: 5; pointer-events: none;
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; color: var(--yellow);
+  background: rgba(13, 14, 17, 0.78); padding: 4px 10px; border-radius: 4px; opacity: 0; transition: opacity 0.25s; }
+.nav-tag.on { opacity: 1; }
+
+/* walking: rails fade back so the world is the thing */
+body.nav-walking .world .hud .rail .board,
+body.nav-walking .world .hud .feed { opacity: 0.55; }
+body.nav-walking .world .tour-pill { display: none !important; }
+
+/* touch controls */
+.nav-touch { position: absolute; inset: 0; z-index: 6; pointer-events: none; }
+.nav-joy { position: absolute; left: 28px; bottom: 36px; width: 128px; height: 128px; border-radius: 50%;
+  background: rgba(13, 14, 17, 0.45); border: 2px solid rgba(242, 239, 232, 0.5); pointer-events: auto; touch-action: none; }
+.nav-knob { position: absolute; left: 39px; top: 39px; width: 50px; height: 50px; border-radius: 50%;
+  background: var(--yellow); border: 2px solid var(--charcoal); pointer-events: none; }
+.nav-btn { position: absolute; pointer-events: auto; touch-action: none; width: 66px; height: 66px; border-radius: 50%;
+  background: rgba(13, 14, 17, 0.6); border: 2px solid rgba(242, 239, 232, 0.6); color: var(--text);
+  font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; }
+.nav-btn.jump { right: 28px; bottom: 40px; width: 84px; height: 84px; border-color: var(--yellow); }
+.nav-btn.fly { right: 124px; bottom: 36px; }
+.nav-btn.use { right: 36px; bottom: 138px; }
+.nav-btn.view { right: 28px; top: 96px; width: 54px; height: 54px; font-size: 10px; }
+
+/* HUD: sound toggle + controls hint */
+.hud-sound { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(13, 14, 17, 0.82); color: var(--text); border: 1px solid var(--concrete); border-radius: 4px; padding: 4px 9px; }
+.hud-sound svg { width: 14px; height: 14px; }
+.hud-sound.off { color: var(--muted); }
+.hud-sound.off .waves { display: none; }
+.hud-sound:not(.off) .cross { display: none; }
+.controls-hint { font-family: var(--mono); font-size: 10.5px; color: var(--text); background: rgba(13, 14, 17, 0.72); padding: 5px 10px;
+  margin-top: 6px; letter-spacing: 0.02em; }
+.controls-hint b { color: var(--yellow); font-weight: 700; }
+.controls-hint { display: none; }
+body.nav-walking .controls-hint { display: block; }
+
+@media (max-width: 900px) {
+  .nav-enter { top: auto; bottom: 110px; max-width: calc(100vw - 32px); }
+  .nav-enter small { display: none; }
+  .controls-hint { display: none; }
+}
