@@ -70,8 +70,11 @@ export async function buildApp(w: Wiring, store = new Store()) {
   });
 
   app.post('/api/cars', async (req, reply) => {
-    const body = (req.body ?? {}) as SpecInput;
+    const body = { ...((req.body ?? {}) as SpecInput) };
+    body.ownerToken = String(req.headers['x-owner-token'] ?? (req.query as { owner?: string }).owner ?? body.ownerToken ?? '');
     const spec = validateSpec(body, process.env.OWNER_TOKEN);
+    if (typeof spec !== 'string' && (body as { isOwnerCar?: boolean }).isOwnerCar && !spec.isOwnerCar)
+      return reply.code(403).send({ error: 'owner token does not match' });
     if (typeof spec === 'string') return reply.code(400).send({ error: spec });
     const phone = String(req.headers['x-phone-id'] ?? req.ip);
     const wait = spec.isOwnerCar ? 0 : cooldown.check(phone);

@@ -1,0 +1,245 @@
+import type { CarPublic, CarSpec } from '../types';
+import { el, qs } from '../dom';
+import { isMock } from '../feed';
+
+const SWATCHES = ['#f5c400', '#e2412b', '#3ddc97', '#6fb3ff', '#ff7ac8', '#f2efe8', '#ffb020', '#8b5cf6'];
+
+type SR = { new (): SpeechRecognitionLike };
+interface SpeechRecognitionLike {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+  start(): void;
+  stop(): void;
+}
+
+export function mountJoin(root: HTMLElement) {
+  document.body.classList.add('phone-body');
+  const params = new URLSearchParams(location.search);
+  const ownerToken = params.get('owner');
+  const mock = isMock();
+
+  let tab: 'build' | 'connect' = 'build';
+  let color = SWATCHES[0];
+  let model: 'claude-haiku-4-5-20251001' | 'claude-sonnet-5' = 'claude-haiku-4-5-20251001';
+  let connectMode: 'webhook' | 'openai' = 'webhook';
+
+  const page = el('div', { class: 'phone' });
+  page.append(
+    el('header', {}, el('div', { class: 'roundel' }), el('div', {}, el('h1', { text: 'CRUMPLE' }), el('small', { text: 'crash-test hall for AI agents' }))),
+    el('h2', { html: 'Send a car <span>down the track</span>' }),
+    el('p', { class: 'lead', text: 'Your agent drives five barriers twice: once bare, once behind the Sekisho airbag. Watch it on the big screen.' }),
+  );
+  if (ownerToken) page.append(el('div', { class: 'owner-banner', text: 'Owner mode: this is car #1. Over-limit payments will ask you to approve on World ID.' }));
+
+  const tabs = el('div', { class: 'tabs', role: 'tablist' });
+  const tabBuild = el('button', { role: 'tab', 'aria-selected': 'true', text: 'Build' });
+  const tabConnect = el('button', { role: 'tab', 'aria-selected': 'false', text: 'Connect' });
+  tabs.append(tabBuild, tabConnect);
+  page.append(tabs);
+
+  // ── Build form ─────────────────────────────────────────────────────────
+  const build = el('form', { class: 'form', novalidate: true });
+  const name = el('input', { name: 'name', maxlength: 24, placeholder: 'e.g. Tanuki', autocomplete: 'off', required: true, autocapitalize: 'words' });
+  const swatches = el('div', { class: 'swatches', role: 'radiogroup', 'aria-label': 'Car colour' });
+  const swatchBtns = SWATCHES.map((c) => {
+    const b = el('button', { type: 'button', class: 'swatch', role: 'radio', 'aria-checked': String(c === color), 'aria-label': c, style: `--c:${c}` });
+    b.onclick = () => {
+      color = c;
+      swatchBtns.forEach((x) => x.setAttribute('aria-checked', String(x === b)));
+    };
+    return b;
+  });
+  swatches.append(...swatchBtns);
+  const persona = el('textarea', { name: 'persona', maxlength: 280, placeholder: 'One line. e.g. “Cheerful shopping assistant who loves a bargain and trusts everyone.”' });
+  const mic = el('button', { type: 'button', class: 'mic hidden', 'aria-label': 'Dictate persona', 'aria-pressed': 'false', html: micSvg() });
+  const personaWrap = el('div', { class: 'persona-wrap' }, persona, mic);
+  const seg = el('div', { class: 'seg' });
+  const haiku = el('button', { type: 'button', 'aria-pressed': 'true', html: 'Haiku<small>fast · default</small>' });
+  const sonnet = el('button', { type: 'button', 'aria-pressed': 'false', html: 'Sonnet<small>smarter · slower</small>' });
+  haiku.onclick = () => {
+    model = 'claude-haiku-4-5-20251001';
+    haiku.setAttribute('aria-pressed', 'true');
+    sonnet.setAttribute('aria-pressed', 'false');
+  };
+  sonnet.onclick = () => {
+    model = 'claude-sonnet-5';
+    haiku.setAttribute('aria-pressed', 'false');
+    sonnet.setAttribute('aria-pressed', 'true');
+  };
+  seg.append(haiku, sonnet);
+  const buildErr = el('div', { class: 'err' });
+  buildErr.hidden = true;
+  const buildBtn = el('button', { class: 'primary', type: 'submit', text: 'Send it down the track' });
+  build.append(
+    field('Name', name),
+    field('Colour', swatches),
+    field('Persona', personaWrap, 'Typed or spoken. The bare car gets this as its whole system prompt.'),
+    field('Model', seg),
+    buildErr,
+    buildBtn,
+  );
+
+  // Web Speech API → persona (hidden when unsupported)
+  const SRCtor = (window as unknown as { SpeechRecognition?: SR; webkitSpeechRecognition?: SR }).SpeechRecognition ?? (window as unknown as { webkitSpeechRecognition?: SR }).webkitSpeechRecognition;
+  if (SRCtor) {
+    mic.classList.remove('hidden');
+    let rec: SpeechRecognitionLike | null = null;
+    mic.onclick = () => {
+      if (rec) {
+        rec.stop();
+        return;
+      }
+      rec = new SRCtor();
+      rec.lang = navigator.language || 'en-US';
+      rec.interimResults = true;
+      rec.continuous = false;
+      const before = persona.value ? persona.value.replace(/\s+$/, '') + ' ' : '';
+      rec.onresult = (e) => {
+        let text = '';
+        for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
+        persona.value = (before + text).slice(0, 280);
+      };
+      rec.onend = rec.onerror = () => {
+        rec = null;
+        mic.setAttribute('aria-pressed', 'false');
+      };
+      mic.setAttribute('aria-pressed', 'true');
+      rec.start();
+    };
+  }
+
+  // ── Connect form ───────────────────────────────────────────────────────
+  const connect = el('form', { class: 'form', novalidate: true });
+  connect.hidden = true;
+  const cname = el('input', { name: 'name', maxlength: 24, placeholder: 'e.g. HAL-9000', autocomplete: 'off', required: true });
+  const cswatches = el('div', { class: 'swatches', role: 'radiogroup', 'aria-label': 'Car colour' });
+  const cswatchBtns = SWATCHES.map((c) => {
+    const b = el('button', { type: 'button', class: 'swatch', role: 'radio', 'aria-checked': String(c === color), 'aria-label': c, style: `--c:${c}` });
+    b.onclick = () => {
+      color = c;
+      cswatchBtns.forEach((x) => x.setAttribute('aria-checked', String(x === b)));
+    };
+    return b;
+  });
+  cswatches.append(...cswatchBtns);
+  const modeSeg = el('div', { class: 'seg' });
+  const mWebhook = el('button', { type: 'button', 'aria-pressed': 'true', html: 'Webhook<small>POST observation → actions</small>' });
+  const mOpenai = el('button', { type: 'button', 'aria-pressed': 'false', html: 'OpenAI-compatible<small>base URL + model + key</small>' });
+  modeSeg.append(mWebhook, mOpenai);
+  const webhook = el('input', { name: 'endpoint', type: 'url', inputmode: 'url', placeholder: 'https://your-agent.example/act', autocomplete: 'off' });
+  const baseUrl = el('input', { name: 'endpoint', type: 'url', inputmode: 'url', placeholder: 'https://api.example.com/v1', autocomplete: 'off' });
+  const oModel = el('input', { name: 'openaiModel', placeholder: 'gpt-5-mini', autocomplete: 'off' });
+  const oKey = el('input', { name: 'openaiApiKey', type: 'password', placeholder: 'sk-…', autocomplete: 'off' });
+  const webhookFields = el('div', { class: 'form' }, field('Webhook URL', webhook, 'We POST each barrier’s Observation and expect { actions }. 10 s timeout.'));
+  const openaiFields = el('div', { class: 'form' }, field('Base URL', baseUrl), field('Model', oModel), field('API key', oKey, 'Used once for this run and never stored.'));
+  openaiFields.hidden = true;
+  mWebhook.onclick = () => {
+    connectMode = 'webhook';
+    mWebhook.setAttribute('aria-pressed', 'true');
+    mOpenai.setAttribute('aria-pressed', 'false');
+    webhookFields.hidden = false;
+    openaiFields.hidden = true;
+  };
+  mOpenai.onclick = () => {
+    connectMode = 'openai';
+    mWebhook.setAttribute('aria-pressed', 'false');
+    mOpenai.setAttribute('aria-pressed', 'true');
+    webhookFields.hidden = true;
+    openaiFields.hidden = false;
+  };
+  const connectErr = el('div', { class: 'err' });
+  connectErr.hidden = true;
+  const connectBtn = el('button', { class: 'primary', type: 'submit', text: 'Connect and run' });
+  connect.append(field('Name', cname), field('Colour', cswatches), field('How we reach it', modeSeg), webhookFields, openaiFields, connectErr, connectBtn);
+
+  page.append(build, connect, el('div', { class: 'back', text: 'Boundary mode: connected cars are judged by Sekisho on what they try to pay, not how they think.' }));
+  root.append(page);
+
+  const setTab = (t: 'build' | 'connect') => {
+    tab = t;
+    tabBuild.setAttribute('aria-selected', String(t === 'build'));
+    tabConnect.setAttribute('aria-selected', String(t === 'connect'));
+    build.hidden = t !== 'build';
+    connect.hidden = t !== 'connect';
+  };
+  tabBuild.onclick = () => setTab('build');
+  tabConnect.onclick = () => setTab('connect');
+
+  // ── submit ─────────────────────────────────────────────────────────────
+  async function submit(spec: CarSpec, err: HTMLElement, btn: HTMLButtonElement) {
+    err.hidden = true;
+    btn.disabled = true;
+    btn.textContent = 'Building your car…';
+    try {
+      let carId: string;
+      if (mock) {
+        await new Promise((r) => setTimeout(r, 600));
+        carId = 'tanuki';
+      } else {
+        const url = ownerToken ? `/api/cars?owner=${encodeURIComponent(ownerToken)}` : '/api/cars';
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...(ownerToken ? { 'x-owner-token': ownerToken } : {}) },
+          body: JSON.stringify(spec),
+        });
+        if (!res.ok) throw new Error((await res.text().catch(() => '')) || `Server said ${res.status}`);
+        const data = (await res.json()) as { car: CarPublic; sessionToken: string };
+        carId = data.car.id;
+        try {
+          sessionStorage.setItem(`crumple:session:${carId}`, data.sessionToken);
+        } catch {
+          /* private mode */
+        }
+      }
+      location.href = `/car/${encodeURIComponent(carId)}${mock ? '?mock=1' : ''}`;
+    } catch (e) {
+      err.textContent = `Could not create the car. ${(e as Error).message}`;
+      err.hidden = false;
+      btn.disabled = false;
+      btn.textContent = tab === 'build' ? 'Send it down the track' : 'Connect and run';
+    }
+  }
+
+  build.onsubmit = (ev) => {
+    ev.preventDefault();
+    const n = name.value.trim();
+    if (!n) return showErr(buildErr, 'Give the car a name.', name);
+    submit({ kind: 'built', name: n, color, persona: persona.value.trim() || undefined, model, isOwnerCar: !!ownerToken }, buildErr, buildBtn);
+  };
+  connect.onsubmit = (ev) => {
+    ev.preventDefault();
+    const n = cname.value.trim();
+    if (!n) return showErr(connectErr, 'Give the car a name.', cname);
+    if (connectMode === 'webhook') {
+      if (!/^https?:\/\//.test(webhook.value.trim())) return showErr(connectErr, 'Webhook URL must start with http(s)://', webhook);
+      submit({ kind: 'webhook', name: n, color, endpoint: webhook.value.trim(), isOwnerCar: !!ownerToken }, connectErr, connectBtn);
+    } else {
+      if (!/^https?:\/\//.test(baseUrl.value.trim())) return showErr(connectErr, 'Base URL must start with http(s)://', baseUrl);
+      if (!oModel.value.trim()) return showErr(connectErr, 'Model is required.', oModel);
+      if (!oKey.value.trim()) return showErr(connectErr, 'API key is required.', oKey);
+      submit({ kind: 'openai', name: n, color, endpoint: baseUrl.value.trim(), openaiModel: oModel.value.trim(), openaiApiKey: oKey.value.trim(), isOwnerCar: !!ownerToken }, connectErr, connectBtn);
+    }
+  };
+  if (params.get('tab') === 'connect') setTab('connect');
+  qs<HTMLInputElement>('input[name=name]', build);
+}
+
+function showErr(box: HTMLElement, msg: string, focus?: HTMLElement) {
+  box.textContent = msg;
+  box.hidden = false;
+  focus?.focus();
+}
+
+function field(label: string, control: HTMLElement, hint?: string) {
+  const wrap = el('div', { class: 'field' }, el('label', { text: label }), control);
+  if (hint) wrap.append(el('div', { class: 'hint', text: hint }));
+  return wrap;
+}
+
+function micSvg() {
+  return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>`;
+}
