@@ -1,3 +1,4 @@
+import { short as sekishoShort } from '@crumple/sekisho';
 // The run engine: one car drives the course twice in parallel (bare and airbag), five barriers each,
 // emitting every ArenaEvent in order. Money moves only through deps.signer + deps.chain; loss is
 // measured on the fork, not from what the agent claimed.
@@ -13,6 +14,8 @@ import { isAddress, isEnsName } from './drivers/sanitize.js';
 export type { CourseAddrs } from './barriers.js';
 
 /** Hard ceiling on one driver call (remote drivers time out sooner on their own). */
+const short = (a: string) => (a.startsWith('0x') && a.length === 42 ? sekishoShort(a as `0x${string}`) : a);
+
 export const DRIVER_TIMEOUT_MS = 60_000;
 
 interface Settled {
@@ -33,9 +36,6 @@ interface LaneCtx {
   driver: CarDriver;
 }
 
-function short(a: string): string {
-  return a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a;
-}
 
 function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
   let t: NodeJS.Timeout;

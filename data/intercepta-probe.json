@@ -1,0 +1,83 @@
+{
+  "at": 1790424943883,
+  "live": true,
+  "budget": {
+    "used": 6,
+    "ceiling": 900,
+    "remaining": 894
+  },
+  "picks": [
+    {
+      "address": "0x0000553f880ffa3728b290e04e819053a3590000",
+      "label": "Inferno Drainer (Etherscan label \"Fake_Phishing182232\", ENS inferno-drainer-4.eth)",
+      "chain": "ethereum",
+      "source": "https://etherscan.io/address/0x0000553f880ffa3728b290e04e819053a3590000",
+      "verified": false,
+      "role": "attacker"
+    },
+    {
+      "address": "0x00001f78189be22c3498cff1b8e02272c3220000",
+      "label": "Inferno Drainer (Etherscan label \"Inferno Drainer\", reported by Scam Sniffer)",
+      "chain": "ethereum",
+      "source": "https://etherscan.io/address/0x00001f78189be22c3498cff1b8e02272c3220000",
+      "verified": true,
+      "role": "attacker",
+      "evidence": {
+        "verdict": "BLOCK",
+        "toxicScore": 100,
+        "reason": "The address appears on external or internal blacklist sources due to prior involvement in high‑risk or malicious activity.",
+        "at": 1790424935847
+      }
+    },
+    {
+      "address": "0x0000daf60a1becf1bd617c584dea964455890000",
+      "label": "Inferno Drainer Phishing Contract 2 (Etherscan label, reported by BlockSec)",
+      "chain": "ethereum",
+      "source": "https://etherscan.io/address/0x0000daf60a1becf1bd617c584dea964455890000",
+      "verified": false,
+      "role": "attacker"
+    },
+    {
+      "address": "0x47666fab8bd0ac7003bce3f5c3585383f09486e2",
+      "label": "Bybit exploiter (Lazarus Group, Feb 2025; Etherscan label \"Bybit Exploiter\")",
+      "chain": "ethereum",
+      "source": "https://etherscan.io/address/0x47666fab8bd0ac7003bce3f5c3585383f09486e2",
+      "verified": true,
+      "role": "attacker",
+      "evidence": {
+        "verdict": "BLOCK",
+        "toxicScore": 100,
+        "reason": "The address has a confirmed history of malicious activity, including scams, phishing, or other harmful behavior.",
+        "at": 1790424939018
+      }
+    },
+    {
+      "address": "0x16fB4859e0AC2b9e5E36DC5bB4EE654615a03D9C",
+      "label": "weather.crumple.eth payee (fresh EOA from WEATHER_SEED)",
+      "chain": "base",
+      "source": "derived: privateKeyToAccount(keccak256(utf8(WEATHER_SEED))) via viem; never funded before the event",
+      "verified": true,
+      "role": "weather",
+      "evidence": {
+        "verdict": "PASS",
+        "toxicScore": 0,
+        "reason": "Intercepta: no risk traits (toxicScore 0)",
+        "at": 1790424940238
+      }
+    },
+    {
+      "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "label": "USDC on Base (native Circle USDC)",
+      "chain": "base",
+      "source": "https://basescan.org/token/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "verified": true,
+      "role": "token",
+      "evidence": {
+        "verdict": "PASS",
+        "toxicScore": 0,
+        "reason": "Intercepta: no risk traits (toxicScore 0)",
+        "at": 1790424943883
+      }
+    }
+  ]
+}

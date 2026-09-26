@@ -101,6 +101,9 @@ importers:
       '@crumple/core':
         specifier: workspace:*
         version: link:../core
+      '@crumple/sekisho':
+        specifier: workspace:*
+        version: link:../sekisho
       '@typesafe-ai/sdk':
         specifier: ^0.6.0
         version: 0.6.0
