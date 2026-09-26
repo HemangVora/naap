@@ -1,4 +1,3 @@
-import solc from 'solc';
 import {
   createPublicClient,
   createWalletClient,
@@ -15,11 +14,12 @@ import {
   type Address,
   type Hex,
   type PrivateKeyAccount,
+  zeroAddress,
 } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { USDC_ABI, USDC_ADDRESS, unitsToUsd, usdcBalanceSlot, usdToUnits } from '@crumple/chain';
 import type { GuardConfirmation, GuardFinding, GuardReport } from './types.js';
-import { CONFIRMABLE, scanSource } from './scan.js';
+import { CONFIRMABLE, scanSource, stripComments } from './scan.js';
 
 // Deploy Guard engine: static scan always; compile (solc-js, no imports); and — only with a fork rpcUrl — deploy the
 // contract to the local anvil Base fork and try each confirmable finding from a random ATTACKER EOA, ONLY against
@@ -32,21 +32,35 @@ export interface GuardEngine {
   audit(source: string, opts?: { name?: string }): Promise<GuardReport>;
 }
 
-/** Best-effort contract name from the source. */
+/** Best-effort contract name from the source (comments ignored, so "// a contract for tips" never names it "for"). */
 export function contractNameOf(source: string): string {
-  return source.match(/\bcontract\s+(\w+)/)?.[1] ?? 'Contract';
+  return stripComments(source).match(/\bcontract\s+(\w+)/)?.[1] ?? 'Contract';
 }
 
 const SANDBOX_USD = 1000; // USDC seeded into the deployed contract
 const GAS_WEI = 100n * 10n ** 18n; // deployer + attacker gas money
 const CONTRACT_WEI = 10n ** 18n; // ETH seeded into the contract so native-drain flaws are provable too
 const MINT_AMOUNT = 1_000_000n * 10n ** 18n;
+/** Explicit gas on every sandbox tx: no eth_estimateGas, so a hostile constructor/probe cannot fan out into upstream RPC calls. */
+const TX_GAS = 8_000_000n;
+/** Constructor integers (a cap, a rate, a supply…): 1,000,000 in 6-decimal units, clamped to the parameter's type. */
+const CTOR_UINT = 1_000_000n * 10n ** 6n;
+
+type Solc = { compile(input: string, opts?: { import?: (path: string) => { contents?: string; error?: string } }): string };
+let solcLoad: Promise<Solc> | undefined;
+/** solc-js is ~10 MB of wasm glue: load it on the first compile, not at server boot. A failed load is retried next time. */
+function loadSolc(): Promise<Solc> {
+  solcLoad ??= import('solc').then((m) => ((m as { default?: Solc }).default ?? (m as unknown as Solc)));
+  solcLoad.catch(() => (solcLoad = undefined));
+  return solcLoad;
+}
 
 type Compiled = { ok: true; name: string; abi: Abi; bytecode: Hex } | { ok: false; error: string };
 
 /** solc standard-JSON compile: paris, optimizer on, pragma forced to ^0.8.24, every import rejected. */
-function compile(source: string): Compiled {
+async function compile(source: string): Promise<Compiled> {
   try {
+    const solc = await loadSolc();
     const content = source.replace(/\bpragma\s+solidity\s+[^;]*;/g, 'pragma solidity ^0.8.24;');
     const input = {
       language: 'Solidity',
@@ -79,13 +93,54 @@ function compile(source: string): Compiled {
 const verdictOf = (findings: GuardFinding[]): GuardReport['verdict'] =>
   findings.some((f) => f.severity === 'critical' || f.severity === 'high') ? 'VULNERABLE' : 'SAFE';
 
-/** Constructor args we can supply: none, or a single address (the token → Base USDC). Anything else → no deploy. */
-function constructorArgs(abi: Abi): unknown[] | null {
+/** Constructor arguments for the sandbox deploy, given the deployer; or why they cannot be filled (→ static-only). */
+export type CtorPlan = { ok: true; args: (deployer: Address) => unknown[] } | { ok: false; reason: string };
+
+/** One constructor value: a token-ish address → Base USDC, any other address → the deployer, integers, bool, strings, bytes. */
+function ctorArg(p: AbiParameter, deployer: Address, only: boolean): unknown {
+  const t = p.type;
+  if (t === 'address') return /token|usdc|asset|currency/i.test(p.name ?? '') || (only && !p.name) ? USDC_ADDRESS : deployer;
+  if (t === 'bool') return false;
+  if (t === 'string') return 'Sandbox';
+  if (t === 'bytes') return '0x';
+  const fixed = /^bytes(\d+)$/.exec(t);
+  if (fixed) return `0x${'00'.repeat(Number(fixed[1]))}`;
+  const int = /^(u?)int(\d*)$/.exec(t);
+  if (int) {
+    const max = (1n << (BigInt(int[2] || 256) - (int[1] ? 0n : 1n))) - 1n;
+    return CTOR_UINT > max ? max : CTOR_UINT;
+  }
+  return undefined; // arrays, tuples, …
+}
+
+export function constructorPlan(abi: Abi): CtorPlan {
   const ctor = abi.find((x) => x.type === 'constructor');
-  const inputs = ctor && 'inputs' in ctor ? ctor.inputs : [];
-  if (inputs.length === 0) return [];
-  if (inputs.length === 1 && inputs[0].type === 'address') return [USDC_ADDRESS];
-  return null;
+  const inputs: readonly AbiParameter[] = ctor && 'inputs' in ctor ? ctor.inputs : [];
+  const bad = inputs.find((p) => ctorArg(p, zeroAddress, inputs.length === 1) === undefined);
+  if (bad) return { ok: false, reason: `constructor parameter ${bad.name || '?'} of type ${bad.type} cannot be filled generically` };
+  return { ok: true, args: (deployer) => inputs.map((p) => ctorArg(p, deployer, inputs.length === 1)) };
+}
+
+/** A sandbox tx that was mined but reverted. */
+class TxReverted extends Error {}
+/** An attacker tx that went through but moved nothing the probe checks. */
+class NoEffect extends Error {}
+
+/**
+ * A confirmable finding whose attacker call actually ran on the fork and reverted or moved nothing: the function is
+ * almost certainly gated by a check the scanner does not recognise. Kept as a medium note to review, not a flaw.
+ */
+export function unconfirmed(f: GuardFinding, how: 'reverted' | 'no-effect'): GuardFinding {
+  const what =
+    how === 'reverted'
+      ? 'On the sandbox fork a stranger’s call to it reverted'
+      : 'On the sandbox fork a stranger’s call to it went through but moved nothing';
+  return {
+    ...f,
+    severity: 'medium',
+    title: `Unconfirmed: ${f.title}`,
+    detail: `${f.detail} ${what}, so it looks gated by a check the scanner doesn’t recognise. Review it.`,
+  };
 }
 
 /** Generic attacker-chosen value for one ABI parameter; null when the type is not generically fillable. */
@@ -124,8 +179,9 @@ function getter(abi: Abi, names: string[], pattern: RegExp, out: 'address' | 'in
 async function deployAndProve(
   rpcUrl: string,
   compiled: Extract<Compiled, { ok: true }>,
-  ctorArgs: unknown[],
+  ctor: Extract<CtorPlan, { ok: true }>,
   findings: GuardFinding[],
+  log: (msg: string) => void,
 ): Promise<{ address: Address; chainId: number; findings: GuardFinding[] }> {
   const transport = http(rpcUrl, { retryCount: 1, timeout: 20_000 });
   const chainId = await createPublicClient({ transport }).getChainId();
@@ -141,9 +197,9 @@ async function deployAndProve(
   const { abi } = compiled;
 
   const send = async (account: PrivateKeyAccount, tx: { to?: Address; data: Hex }) => {
-    const hash = await wallet.sendTransaction({ account, chain, ...tx });
+    const hash = await wallet.sendTransaction({ account, chain, gas: TX_GAS, ...tx });
     const receipt = await pub.waitForTransactionReceipt({ hash, timeout: 30_000 });
-    if (receipt.status !== 'success') throw new Error(`tx ${hash} reverted`);
+    if (receipt.status !== 'success') throw new TxReverted(`tx ${hash} reverted`);
     return receipt;
   };
   const read = (address: Address, fn: AbiFunction | undefined, args: unknown[] = []): Promise<unknown> =>
@@ -158,7 +214,11 @@ async function deployAndProve(
     await anvil('anvil_setBalance', [deployer.address, numberToHex(GAS_WEI)]);
     await anvil('anvil_setBalance', [who, numberToHex(GAS_WEI)]);
 
-    const deployed = await send(deployer, { data: encodeDeployData({ abi, bytecode: compiled.bytecode, args: ctorArgs } as never) });
+    const deployed = await send(deployer, { data: encodeDeployData({ abi, bytecode: compiled.bytecode, args: ctor.args(deployer.address) } as never) }).catch(
+      (e: Error) => {
+        throw new Error(e instanceof TxReverted ? 'the constructor reverted on the fork' : `deploy failed: ${e.message.split('\n')[0]}`);
+      },
+    );
     const target = deployed.contractAddress;
     if (!target) throw new Error('deploy produced no contract address');
     await anvil('anvil_setStorageAt', [USDC_ADDRESS, usdcBalanceSlot(target), numberToHex(usdToUnits(SANDBOX_USD), { size: 32 })]);
@@ -183,7 +243,7 @@ async function deployAndProve(
         }
         const ethGain = ethAfter - ethBefore + r.gasUsed * r.effectiveGasPrice;
         if (ethGain > 0n) return { exploit: `A stranger called ${sig} and took ${formatUnits(ethGain, 18)} ETH from the contract.`, txHash: r.transactionHash };
-        throw new Error('nothing moved');
+        throw new NoEffect('nothing moved');
       }
       if (id === 'unprotected-mint') {
         const bal = abi.filter(isFn).find((x) => x.name === 'balanceOf' && x.inputs.length === 1 && x.inputs[0].type === 'address' && !mutates(x));
@@ -193,7 +253,7 @@ async function deployAndProve(
         if (before === undefined) throw new Error('no balanceOf/totalSupply to verify a mint');
         const r = await call(MINT_AMOUNT);
         const minted = ((await measure()) ?? before) - before;
-        if (minted <= 0n) throw new Error('nothing minted');
+        if (minted <= 0n) throw new NoEffect('nothing minted');
         const decimals = Number((await read(target, getter(abi, ['decimals'], /^decimals$/, 'int')).catch(() => undefined)) ?? 18);
         return { exploit: `A stranger called ${sig} and minted ${formatUnits(minted, decimals)} tokens to themselves.`, txHash: r.transactionHash };
       }
@@ -203,7 +263,7 @@ async function deployAndProve(
         if (!before || isAddressEqual(before, who)) throw new Error('no owner getter to verify');
         const r = await call(0n);
         const after = (await read(target, g)) as Address;
-        if (!isAddressEqual(after, who)) throw new Error('owner unchanged');
+        if (!isAddressEqual(after, who)) throw new NoEffect('owner unchanged');
         return { exploit: `A stranger called ${sig} and made themselves the owner.`, txHash: r.transactionHash, ownerBefore: before, ownerAfter: after };
       }
       if (id === 'unprotected-price') {
@@ -212,7 +272,7 @@ async function deployAndProve(
         if (before === undefined) throw new Error('no price getter to verify');
         const r = await call(before === 1n ? 2n : 1n);
         const after = (await read(target, g)) as bigint;
-        if (after === before) throw new Error('price unchanged');
+        if (after === before) throw new NoEffect('price unchanged');
         return { exploit: `A stranger called ${sig} and moved the price from ${before} to ${after}.`, txHash: r.transactionHash };
       }
       throw new Error(`no probe for ${id}`);
@@ -224,8 +284,15 @@ async function deployAndProve(
       const fn = CONFIRMABLE.has(f.id) ? abi.filter(isFn).find((x) => x.name === name && mutates(x)) : undefined;
       try {
         out.push(fn ? { ...f, confirmed: await probe(f.id, fn) } : f);
-      } catch {
-        out.push(f); // a revert (or an unfillable / unverifiable call) = not confirmed
+      } catch (e) {
+        // The attacker call ran and reverted / moved nothing → a review note. Could not probe it at all (unfillable
+        // args, no getter to verify, an RPC hiccup) → the static finding stands as is.
+        if (e instanceof TxReverted) out.push(unconfirmed(f, 'reverted'));
+        else if (e instanceof NoEffect) out.push(unconfirmed(f, 'no-effect'));
+        else {
+          log(`probe of ${f.where ?? f.id} not run: ${(e as Error).message.split('\n')[0]}`);
+          out.push(f);
+        }
       }
     }
     return { address: target, chainId, findings: out };
@@ -234,7 +301,8 @@ async function deployAndProve(
   }
 }
 
-export function createGuardEngine(cfg: { rpcUrl?: string } = {}): GuardEngine {
+export function createGuardEngine(cfg: { rpcUrl?: string; log?: (msg: string) => void } = {}): GuardEngine {
+  const log = cfg.log ?? ((msg: string) => console.warn(`[guard] ${msg}`));
   // one dynamic audit at a time: interleaved snapshot/revert pairs would wipe each other's sandbox
   let lock: Promise<unknown> = Promise.resolve();
   const serial = <T>(fn: () => Promise<T>): Promise<T> => {
@@ -252,18 +320,23 @@ export function createGuardEngine(cfg: { rpcUrl?: string } = {}): GuardEngine {
         /* the scanner is best-effort; compile + fork still run */
       }
       const base = { contractName: opts?.name ?? contractNameOf(source), findings, source, auditedAt: Date.now() };
-      const compiled = compile(source);
+      const compiled = await compile(source);
       if (!compiled.ok) return { ...base, verdict: 'COMPILE_ERROR', compileError: compiled.error };
 
       const report: GuardReport = { ...base, contractName: opts?.name ?? compiled.name, verdict: verdictOf(findings) };
-      const ctorArgs = constructorArgs(compiled.abi);
       const rpcUrl = cfg.rpcUrl;
-      if (!rpcUrl || !ctorArgs) return report;
+      if (!rpcUrl) return report;
+      const ctor = constructorPlan(compiled.abi);
+      if (!ctor.ok) {
+        log(`${report.contractName}: static-only, ${ctor.reason}`);
+        return report;
+      }
       try {
-        const proven = await serial(() => deployAndProve(rpcUrl, compiled, ctorArgs, findings));
+        const proven = await serial(() => deployAndProve(rpcUrl, compiled, ctor, findings, log));
         return { ...report, ...proven, verdict: verdictOf(proven.findings) };
-      } catch {
-        return report; // fork down, deploy reverted, … → static-only
+      } catch (e) {
+        log(`${report.contractName}: static-only, ${(e as Error).message.split('\n')[0]}`); // fork down, ctor reverted, …
+        return report;
       }
     },
   };

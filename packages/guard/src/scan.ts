@@ -23,6 +23,91 @@ const ACCESS_MODIFIER = /\b(only[A-Z]\w*|restricted|auth|authorized|requiresAuth
 const OWNER_REQUIRE =
   /\b(require|if)\s*\(\s*(?:_?msg\.sender|_?sender)\s*(?:==|!=)\s*(?:owner|admin|_owner|governance|_admin)\b|_checkOwner\s*\(|_checkRole\s*\(|ownerOnly/;
 
+/** Condition text of every `require(...)` / `if (...)` in a body, with whether an `if` leads straight to a revert. */
+function conditions(body: string): { kind: 'require' | 'if'; cond: string; reverts: boolean }[] {
+  const out: { kind: 'require' | 'if'; cond: string; reverts: boolean }[] = [];
+  const re = /\b(require|if)\s*\(/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(body))) {
+    let depth = 1;
+    let i = re.lastIndex;
+    for (; i < body.length && depth > 0; i++) {
+      if (body[i] === '(') depth++;
+      else if (body[i] === ')') depth--;
+    }
+    const cond = body.slice(re.lastIndex, i - 1);
+    out.push({ kind: m[1] as 'require' | 'if', cond, reverts: /^\s*\{?\s*revert\b/.test(body.slice(i)) });
+  }
+  return out;
+}
+
+// Something msg.sender is compared against: `arbiter`, `pendingOwner`, `operator()`, `e.arbiter`, `escrows[id].buyer`.
+const SUBJECT = String.raw`([A-Za-z_]\w*)((?:\[[^\]]*\])?(?:\.[A-Za-z_]\w*)*(?:\(\))?)`;
+const END = String.raw`(?=\s*(?:&&|\|\||,|$))`;
+const paramNames = (params: string) =>
+  new Set(params.split(',').map((p) => p.trim().split(/\s+/).pop() ?? '').filter(Boolean));
+
+/**
+ * A caller check against a stored role: `require(msg.sender == X)` or `if (msg.sender != X) revert …` (either operand
+ * order), where X is a state identifier, getter or member — never tx.origin/msg/block, and never one of the function's
+ * own parameters (`require(msg.sender == to)` lets anyone pass themselves).
+ */
+function senderGuard(body: string, params: string): boolean {
+  const own = paramNames(params);
+  const isRole = (root: string, rest: string) => !/^(tx|msg|block|address|this)$/.test(root) && !(own.has(root) && !rest);
+  for (const { kind, cond, reverts } of conditions(body)) {
+    const op = kind === 'require' ? '==' : '!=';
+    if (kind === 'if' && !reverts) continue;
+    const c = cond.trim();
+    const fwd = new RegExp(String.raw`msg\.sender\s*${op}\s*${SUBJECT}${END}`, 'g');
+    const rev = new RegExp(String.raw`(?:^|[\s(&|!])${SUBJECT}\s*${op}\s*msg\.sender\b`, 'g');
+    for (const re of [fwd, rev]) for (const x of c.matchAll(re)) if (isRole(x[1]!, x[2] ?? '')) return true;
+  }
+  return false;
+}
+
+/** Custom modifiers whose own body is a caller check, e.g. `modifier onlyArbiter` / `modifier gated`. */
+function guardModifiers(src: string): Set<string> {
+  const names = new Set<string>();
+  const re = /\bmodifier\s+(\w+)\s*(?:\(([^)]*)\))?[^{;]*\{/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(src))) {
+    let depth = 1;
+    let i = re.lastIndex;
+    for (; i < src.length && depth > 0; i++) {
+      if (src[i] === '{') depth++;
+      else if (src[i] === '}') depth--;
+    }
+    const body = src.slice(re.lastIndex, i - 1);
+    if (OWNER_REQUIRE.test(body) || senderGuard(body, m[2] ?? '')) names.add(m[1]!);
+  }
+  return names;
+}
+
+const SENDER_SLOT = String.raw`[\w.]+\s*(?:\[[^\]]*\]\s*)*\[\s*msg\.sender\s*\](?:\.\w+)?`;
+const SELF_SHAPED = /withdraw|claim|redeem|refund|unstake|exit|cashout/i;
+
+/**
+ * A withdraw/claim-shaped function that only touches the caller's own entry: it checks the caller's balance
+ * (`require(balances[msg.sender] >= amount)`), deducts it (`balances[msg.sender] -= amount`, `= 0`, `delete`, `_burn`),
+ * or is a one-time claim (`require(!claimed[msg.sender]); claimed[msg.sender] = true`). A stranger can only move
+ * their own (zero) share, so it is not an "anyone can drain / mint" finding.
+ */
+function selfScoped(fn: ParsedFunction): boolean {
+  if (!SELF_SHAPED.test(fn.name)) return false;
+  const b = fn.body;
+  const deducts =
+    new RegExp(String.raw`${SENDER_SLOT}\s*(?:-=|=\s*0\s*;|=\s*${SENDER_SLOT}\s*-)`).test(b) ||
+    new RegExp(String.raw`\bdelete\s+${SENDER_SLOT}`).test(b) ||
+    /\b_burn\s*\(\s*msg\.sender\b/.test(b);
+  if (deducts) return true;
+  const conds = conditions(b).map((c) => c.cond);
+  const balanceCheck = new RegExp(String.raw`${SENDER_SLOT}\s*(?:>=|>)|(?:<=|<)\s*${SENDER_SLOT}`);
+  if (conds.some((c) => balanceCheck.test(c))) return true;
+  const once = new RegExp(String.raw`!\s*(${SENDER_SLOT})`);
+  return conds.some((c) => once.test(c)) && new RegExp(String.raw`${SENDER_SLOT}\s*=\s*true\b`).test(b);
+}
+
 /** Strip line and block comments so keywords in comments never trigger a finding. */
 export function stripComments(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' ')).replace(/\/\/[^\n]*/g, '');
@@ -37,6 +122,7 @@ function lineOf(src: string, index: number): number {
 /** Extract every function with its body by brace-matching. Operates on comment-stripped source. */
 export function parseFunctions(src: string): ParsedFunction[] {
   const out: ParsedFunction[] = [];
+  const mods = guardModifiers(src);
   const sigRe = /\bfunction\s+(\w+)\s*\(([^)]*)\)([^{;]*)(\{|;)/g;
   let m: RegExpExecArray | null;
   while ((m = sigRe.exec(src))) {
@@ -61,7 +147,11 @@ export function parseFunctions(src: string): ParsedFunction[] {
           ? 'private'
           : 'public';
     const isView = /\b(view|pure)\b/.test(attrs);
-    const guarded = ACCESS_MODIFIER.test(attrs) || OWNER_REQUIRE.test(body);
+    const guarded =
+      ACCESS_MODIFIER.test(attrs) ||
+      OWNER_REQUIRE.test(body) ||
+      senderGuard(body, params) ||
+      [...mods].some((mod) => new RegExp(String.raw`\b${mod}\b`).test(attrs));
     out.push({ name, params, attrs, body, line: lineOf(src, m.index), visibility, isView, guarded });
   }
   return out;
@@ -93,14 +183,16 @@ export function scanSource(source: string): GuardFinding[] {
     if (!exposed(fn)) continue;
     const isConstructor = fn.name === 'constructor';
     if (isConstructor) continue;
+    const ownShare = selfScoped(fn);
     if (MOVES_VALUE.test(fn.body)) {
-      push(
-        'unprotected-withdraw',
-        'critical',
-        'Anyone can drain the contract',
-        `${fn.name}() moves funds out but has no access control — any stranger can call it and take the balance.`,
-        fn,
-      );
+      if (!ownShare)
+        push(
+          'unprotected-withdraw',
+          'critical',
+          'Anyone can drain the contract',
+          `${fn.name}() moves funds out but has no access control — any stranger can call it and take the balance.`,
+          fn,
+        );
     } else if (SETS_OWNER.test(fn.body)) {
       push(
         'missing-access-control',
@@ -117,7 +209,7 @@ export function scanSource(source: string): GuardFinding[] {
         `${fn.name}() updates a price/oracle value with no access control — a stranger can mis-price collateral (the Moonwell class).`,
         fn,
       );
-    } else if (MINTS.test(fn.body) && /\b(mint|issue|claim|reward|airdrop|faucet)\b/i.test(fn.name)) {
+    } else if (!ownShare && MINTS.test(fn.body) && /\b(mint|issue|claim|reward|airdrop|faucet)\b/i.test(fn.name)) {
       push(
         'unprotected-mint',
         'critical',
