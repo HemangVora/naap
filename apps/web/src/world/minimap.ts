@@ -28,16 +28,13 @@ export class MiniMap {
   private plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private hit = new THREE.Vector3();
   private ndc = new THREE.Vector2();
-  private tmpP = new THREE.Vector3();
-  /** the local player (nav.marker()): drawn as an arrow with heading; walking hides the camera footprint */
-  player: (() => { x: number; z: number; heading: number; walk: boolean } | null) | null = null;
 
   constructor(onPick: (p: THREE.Vector3) => void) {
     this.c = el('canvas');
     this.c.width = 440;
     this.c.height = 300;
     this.g = this.c.getContext('2d')!;
-    this.el = el('div', { class: 'minimap' }, this.c, el('div', { class: 'mm-hint', text: 'you = arrow · click the map to go there · V view' }));
+    this.el = el('div', { class: 'minimap' }, this.c, el('div', { class: 'mm-hint', text: 'your view = the frame · click the map to glide there' }));
     this.c.addEventListener('click', (e) => {
       const r = this.c.getBoundingClientRect();
       const px = ((e.clientX - r.left) / r.width) * this.c.width;
@@ -52,8 +49,6 @@ export class MiniMap {
     const H = this.c.height;
     this.bounds.makeEmpty();
     for (const t of tracks) this.bounds.union(t.box);
-    const me = this.player?.() ?? null;
-    if (me?.walk && !this.bounds.isEmpty()) this.bounds.expandByPoint(this.tmpP.set(me.x, 0, me.z));
     if (this.bounds.isEmpty()) this.bounds.set(new THREE.Vector3(-100, 0, -50), new THREE.Vector3(100, 0, 50));
     const pad = 16;
     const bw = this.bounds.max.x - this.bounds.min.x;
@@ -79,8 +74,6 @@ export class MiniMap {
       g.textBaseline = 'bottom';
       g.fillText(t.name.slice(0, 22), X(t.box.min.x) + 3, Z(zr) - 2);
     }
-    // camera footprint (overview views)
-    if (!me?.walk) this.footprint(camera, X, Z);
     for (const c of cars) {
       g.fillStyle = c.color;
       g.beginPath();
@@ -90,41 +83,8 @@ export class MiniMap {
       g.strokeStyle = c.crashed ? '#e2412b' : '#0d0e11';
       g.stroke();
     }
-    if (me) this.arrow(X(me.x), Z(me.z), me.heading, me.walk);
-  }
-
-  /** Player arrow: points along the view (forward = (−sin yaw, −cos yaw) in x/z). */
-  private arrow(px: number, py: number, heading: number, walk: boolean) {
-    const g = this.g;
-    const fx = -Math.sin(heading);
-    const fz = -Math.cos(heading);
-    const rx = -fz;
-    const rz = fx;
-    const L = walk ? 15 : 11;
-    const Wd = walk ? 8 : 6;
-    g.save();
-    if (walk) {
-      // view cone
-      g.fillStyle = 'rgba(245,196,0,0.18)';
-      g.beginPath();
-      g.moveTo(px, py);
-      g.lineTo(px + (fx * 3 + rx * 1.6) * 16, py + (fz * 3 + rz * 1.6) * 16);
-      g.lineTo(px + (fx * 3 - rx * 1.6) * 16, py + (fz * 3 - rz * 1.6) * 16);
-      g.closePath();
-      g.fill();
-    }
-    g.beginPath();
-    g.moveTo(px + fx * L, py + fz * L);
-    g.lineTo(px - fx * L * 0.55 + rx * Wd, py - fz * L * 0.55 + rz * Wd);
-    g.lineTo(px - fx * L * 0.25, py - fz * L * 0.25);
-    g.lineTo(px - fx * L * 0.55 - rx * Wd, py - fz * L * 0.55 - rz * Wd);
-    g.closePath();
-    g.fillStyle = walk ? '#f5c400' : 'rgba(242,239,232,0.85)';
-    g.fill();
-    g.lineWidth = 2;
-    g.strokeStyle = '#0d0e11';
-    g.stroke();
-    g.restore();
+    // the camera's view footprint on the ground (a trapezoid), on top so it reads over the plots
+    this.footprint(camera, X, Z);
   }
 
   private footprint(camera: THREE.PerspectiveCamera, X: (x: number) => number, Z: (z: number) => number) {
@@ -139,21 +99,35 @@ export class MiniMap {
       this.ndc.set(x, y);
       this.ray.setFromCamera(this.ndc, camera);
       const p = this.ray.ray.intersectPlane(this.plane, this.hit);
-      if (p && p.distanceTo(camera.position) < 900) pts.push(p.clone());
+      // near the ground the top edge grazes the horizon: cap how far the frame reaches
+      const cap = Math.max(60, Math.min(700, camera.position.y * 7));
+      if (p && p.distanceTo(camera.position) < cap) pts.push(p.clone());
       else {
         const d = this.ray.ray.direction.clone();
         d.y = 0;
-        d.normalize().multiplyScalar(700);
+        d.normalize().multiplyScalar(cap);
         pts.push(camera.position.clone().add(d));
       }
     }
-    g.strokeStyle = '#f2efe8';
-    g.lineWidth = 2;
-    g.fillStyle = 'rgba(242,239,232,0.08)';
+    g.save();
+    g.lineJoin = 'round';
+    g.fillStyle = 'rgba(245,196,0,0.16)';
     g.beginPath();
     pts.forEach((p, i) => (i ? g.lineTo(X(p.x), Z(p.z)) : g.moveTo(X(p.x), Z(p.z))));
     g.closePath();
     g.fill();
+    g.lineWidth = 4;
+    g.strokeStyle = 'rgba(13,14,17,0.8)';
     g.stroke();
+    g.lineWidth = 2;
+    g.strokeStyle = '#f5c400';
+    g.stroke();
+    // the near edge (bottom of the screen) heavier, so the frame reads as a view direction
+    g.beginPath();
+    g.moveTo(X(pts[0].x), Z(pts[0].z));
+    g.lineTo(X(pts[1].x), Z(pts[1].z));
+    g.lineWidth = 3.5;
+    g.stroke();
+    g.restore();
   }
 }

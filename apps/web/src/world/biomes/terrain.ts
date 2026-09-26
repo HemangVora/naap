@@ -6,6 +6,7 @@ import * as G from './geo';
 import { M, emberMat, lavaMat, particleGeo, waterMat } from './mats';
 import { bridgeSignTexture, chevronTexture, detourTexture, glowTex, priceBoardTexture, prizeTexture } from './signs';
 import { fbm, noise2, rng, type Scatter } from './scatter';
+import { rockMaterial, spireGeometry, strataWall, type Palette } from './rockkit';
 
 // One plot = one mesa. Its heightfield follows the obstacle order: each station's segment is carved into that obstacle's
 // biome (Signal Ridge cliff, Caldera lava bowl, River Canyon gorge, Rockfall Pass walls, Meadow hills). One draw call per plot.
@@ -147,10 +148,10 @@ export function buildPlot(track: TrackLike, scatter: Scatter): PlotDress {
       case 'over-limit': {
         const inPass = u >= -9 && u <= 15;
         if (inPass && z < G.WALL_Z_FAR) {
-          h = ss(G.WALL_Z_FAR, G.WALL_Z_FAR - 1.4, z) * (12 + nz * 5 + nz2 * 1.5);
+          h = ss(G.WALL_Z_FAR - 1.4, G.WALL_Z_FAR - 3.2, z) * (10.5 + nz * 3 + nz2 * 1.2);
           if (out) out.copy(C.ochre).lerp(C.ochreHi, nz2);
         } else if (inPass && z > G.WALL_Z_NEAR) {
-          h = ss(G.WALL_Z_NEAR, G.WALL_Z_NEAR + 1.2, z) * (3.5 + nz * 2);
+          h = ss(G.WALL_Z_NEAR + 1.2, G.WALL_Z_NEAR + 2.6, z) * (3.2 + nz * 1.5);
           if (out) out.copy(C.ochre).lerp(C.ochreHi, nz2);
         } else {
           h = d > 0 ? (0.5 + nz * 4) * ss(0, 4, d) : 0;
@@ -208,23 +209,41 @@ export function buildPlot(track: TrackLike, scatter: Scatter): PlotDress {
 
   const heightAt = (lx: number, lz: number) => sample(lx, lz);
 
-  // ── scatter (world space) ──
+  // ── scatter (world space): pines on the meadows, rock clusters (1 big + medium + scree) in the rock biomes ──
   const R = rng(Math.abs(Math.round(ox * 13 + oz * 7)) + 11);
+  const kit = scatter.kit;
+  const PAL: Partial<Record<BarrierId, Palette>> = { 'grok-morse': 'granite', freysa: 'basalt', 'x402-swap': 'sand', 'over-limit': 'ochre' };
+  const groundW = (wx: number, wz: number) => sample(wx - ox, wz - oz);
+  /** keep rocks off the lanes, out of the river / lava / wall bodies */
+  const clear = (wx: number, wz: number) => {
+    const x = wx - ox;
+    const z = wz - oz;
+    if (z > BAND0 - 1.1 && z < BAND1 + 1.1) return false;
+    if (z < Z0 + 1.5 || z > Z1 - 1.5) return false;
+    const k = seg(x);
+    if (k >= 0) {
+      const u = x - sxs[k];
+      const ty = obs[k].type;
+      if (ty === 'x402-swap' && u > G.RIVER_X0 - 0.6 && u < G.RIVER_X1 + 0.6) return false;
+      if (ty === 'x402-swap' && z < BAND0 && z > -16 && u > -4 && u < G.RIVER_X1 + 2) return false; // detour + broken bridge
+      if (ty === 'freysa' && u > G.LAVA_X0 - 0.5 && u < G.LAVA_X1 + 0.5 && z < G.LAVA_Z1 + 0.5) return false;
+      if (ty === 'over-limit' && u > -10 && u < 16 && (z < G.WALL_Z_FAR - 0.9 || z > G.WALL_Z_NEAR + 0.6)) return false;
+      if (ty === 'grok-morse' && u > G.CLIFF_X0 - 1 && u < G.CLIFF_X1 + 1 && z < G.CLIFF_Z + 0.5 && z > -21.5) return false;
+    }
+    return sample(x, z) > G.VALLEY_Y + 3;
+  };
   for (let i = 0; i < 90; i++) {
     const x = PX0 + R() * (PX1 - PX0);
     const z = R() < 0.5 ? -25 + R() * 16 : 23 + R() * 2.5;
     const t = typeAt(x);
     const h = sample(x, z);
-    if (h < -0.6 && t !== 'x402-swap') continue;
     if (t === 'legit' || t === 'start') {
+      if (h < -0.6) continue;
       if (z > BAND0 - 5 && z < BAND1 + 1) continue;
       const s = 0.7 + R() * 0.7;
       scatter.pines.add(x + ox, h - 0.2, z + oz, s, s * (0.9 + R() * 0.4), s, 0, R() * 6, 0);
-    } else if (t !== 'x402-swap' || (z < -15 || z > 23)) {
-      const s = 0.4 + R() * 1.3;
-      const colr = t === 'grok-morse' ? '#6b6f76' : t === 'freysa' ? '#2d2724' : t === 'x402-swap' ? '#a86a3a' : '#857560';
-      if (h < -0.6) continue;
-      scatter.rocks.add(x + ox, h + s * 0.2, z + oz, s * 1.2, s * 0.8, s, R() * 3, R() * 3, R() * 3, colr);
+    } else if (i % 3 === 0) {
+      kit.cluster(PAL[t] ?? 'granite', R, x + ox, z + oz, 0.9 + R() * 1.3, groundW, clear);
     }
   }
 
@@ -232,6 +251,10 @@ export function buildPlot(track: TrackLike, scatter: Scatter): PlotDress {
   const calderas: CalderaFx[] = [];
   const rivers: THREE.Mesh[] = [];
   const spots: ({ x: number; y: number; z: number; rotY: number } | null)[] = [];
+
+  const cliffParts: THREE.BufferGeometry[] = [];
+  const mat4 = (rotY: number, x: number, z: number) => new THREE.Matrix4().makeTranslation(x, 0, z).multiply(new THREE.Matrix4().makeRotationY(rotY));
+  const H2 = Math.PI / 2;
 
   obs.forEach((ob, i) => {
     const sx = sxs[i];
@@ -258,9 +281,7 @@ export function buildPlot(track: TrackLike, scatter: Scatter): PlotDress {
       // rock spire in the chasm carrying the Morse billboard + radio mast
       const spX = sx + 2;
       const spZ = -19.2;
-      const spire = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 5.2, 18, 7, 3), M.rock);
-      spire.material = new THREE.MeshStandardMaterial({ color: 0x5a5f66, flatShading: true, roughness: 0.95 });
-      spire.position.set(spX, G.CLIFF_FLOOR_Y + 9 - 0.5 + 0.5, spZ);
+      const spire = new THREE.Mesh(spireGeometry(spX, spZ, G.CLIFF_FLOOR_Y - 1, 1.5, 5.4, 3.5, 'granite', 300 + i * 17 + Math.round(oz)), rockMaterial());
       spire.castShadow = spire.receiveShadow = true;
       spire.userData.solid = true;
       add(spire);
@@ -301,10 +322,24 @@ export function buildPlot(track: TrackLike, scatter: Scatter): PlotDress {
       wash.scale.set(16, 16, 1);
       wash.position.set(spX + 3.3, 1.5 + H * 0.6, spZ - 1.2);
       add(wash);
+      // the drop: granite strata on the cliff face and both chasm sides, scree + boulders on the floor
+      const sd = 40 + i * 7 + Math.round(Math.abs(oz));
+      cliffParts.push(
+        strataWall({ x0: -(sx + G.CLIFF_X1 + 0.6), x1: -(sx + G.CLIFF_X0 - 0.6), yBase: G.CLIFF_FLOOR_Y - 1.5, yTop: 0, capY: -0.06, depth: 3.5, seed: sd, pal: 'granite', matrix: mat4(Math.PI, 0, G.CLIFF_Z - 0.35) }),
+        strataWall({ x0: -G.CLIFF_Z + 0.4, x1: 25.5, yBase: G.CLIFF_FLOOR_Y - 1.5, yTop: 9, capAt: (lx) => sample(sx + G.CLIFF_X0 - 0.6, -lx) - 0.05, crest: 1, depth: 3.5, seed: sd + 1, pal: 'granite', matrix: mat4(H2, sx + G.CLIFF_X0 - 0.2, 0) }),
+        strataWall({ x0: -25.5, x1: G.CLIFF_Z - 0.4, yBase: G.CLIFF_FLOOR_Y - 1.5, yTop: 9, capAt: (lx) => sample(sx + G.CLIFF_X1 + 0.6, lx) - 0.05, crest: 1, depth: 3.5, seed: sd + 2, pal: 'granite', matrix: mat4(-H2, sx + G.CLIFF_X1 + 0.2, 0) }),
+      );
       for (let k = 0; k < 9; k++) {
-        const a = R() * Math.PI * 2;
-        const s = 0.8 + R() * 1.8;
-        scatter.rocks.add(sx + 9 + ox + Math.cos(a) * (3 + R() * 6), G.CLIFF_FLOOR_Y + 1 + s * 0.3, -16 + oz + Math.sin(a) * 3, s * 1.3, s, s, R() * 3, R() * 3, R() * 3, '#5b5f66');
+        const cx = sx + G.CLIFF_X0 + 1.5 + ((k + R()) / 9) * (G.CLIFF_X1 - G.CLIFF_X0 - 3);
+        const cz = k % 2 ? -9.8 - R() * 2.5 : -21 - R() * 3;
+        if (Math.hypot(cx - spX, cz - spZ) < 6.5) continue;
+        if (Math.hypot(cx - (sx + G.CLIFF_REST.dx), cz - G.CLIFF_REST.z) < 3.5) continue;
+        kit.cluster('granite', R, cx + ox, cz + oz, 1.2 + R() * 1.4, groundW);
+      }
+      for (let k = 0; k < 40; k++) {
+        const x = sx + G.CLIFF_X0 + R() * (G.CLIFF_X1 - G.CLIFF_X0);
+        const z = G.CLIFF_Z - 0.8 - Math.pow(R(), 1.8) * 5;
+        kit.scree('granite', k, x + ox, sample(x, z), z + oz, 0.2 + R() * 0.45, R() * 6.28, 0.85 + R() * 0.25);
       }
       storms.push({ x: spX + 3.3 + ox, y: 1.5 + H, z: spZ - 1.2 + oz, beacon: bGlow, wash });
     } else if (ob.type === 'freysa') {
@@ -372,10 +407,39 @@ export function buildPlot(track: TrackLike, scatter: Scatter): PlotDress {
       glow.position.set(sx + (G.LAVA_X0 + G.LAVA_X1) / 2, G.LAVA_Y + 3, (G.LAVA_Z0 + G.LAVA_Z1) / 2);
       add(glow);
       calderas.push({ x: glow.position.x + ox, z: glow.position.z + oz, embers, shimmer, glow, vaultGlow });
-      for (let k = 0; k < 10; k++) {
-        const a = R() * Math.PI * 2;
-        const s = 0.8 + R() * 1.6;
-        scatter.rocks.add(sx + G.VAULT.dx + ox + Math.cos(a) * (8 + R() * 6), G.LAVA_Y + 0.2, G.VAULT.z + oz + Math.sin(a) * 4, s, s * 0.6, s, R(), R() * 6, R(), '#231d1a');
+      // jagged basalt rim: leaning shards along the three far edges, hot at the lava line
+      const rimPts: [number, number, number][] = [];
+      for (let z = G.LAVA_Z0 + 1; z < G.LAVA_Z1 - 1.5; z += 1.6 + R() * 1.2) {
+        rimPts.push([G.LAVA_X0 + 0.6 + R() * 1.2, z, 1]);
+        rimPts.push([G.LAVA_X1 - 0.6 - R() * 1.2, z, -1]);
+      }
+      for (let u = G.LAVA_X0 + 1; u < G.LAVA_X1 - 1; u += 1.5 + R() * 1.2) rimPts.push([u, G.LAVA_Z0 + 0.6 + R() * 1.2, 0]);
+      for (const [u, z, side] of rimPts) {
+        const x = sx + u;
+        const s = 0.9 + R() * 1.1;
+        const lean = side === 0 ? 0 : side * (0.15 + R() * 0.2);
+        kit.shard('basalt', Math.floor(R() * 3), x + ox, Math.max(G.LAVA_Y - 0.6, sample(x, z) - 0.3), z + oz, s, R() * 6.28, lean, 0.85 + R() * 0.3);
+      }
+      // near shore (road side): low glowing blocks, clear of the ramp
+      for (let u = G.LAVA_X0 + 0.5; u < G.LAVA_X1; u += 1.4 + R()) {
+        if (u > G.RAMP_START.dx - 1.5 && u < G.RAMP_END.dx + 2) continue;
+        const x = sx + u;
+        const z = G.LAVA_Z1 - 0.9 - R() * 0.8;
+        kit.boulder('basalt', Math.floor(R() * 6), x + ox, G.LAVA_Y - 0.1, z + oz, 0.6 + R() * 0.7, R() * 6.28, { sy: 0.8, tint: 0.9 + R() * 0.2 });
+      }
+      // the vault island: a ring of basalt, and a few crust rocks floating in the lava
+      for (let k = 0; k < 9; k++) {
+        const a = (k / 9) * Math.PI * 2 + R() * 0.4;
+        const x = sx + G.VAULT.dx + Math.cos(a) * (4.4 + R() * 0.8);
+        const z = G.VAULT.z + Math.sin(a) * (4.4 + R() * 0.8);
+        if (Math.hypot(x - (sx + G.RAMP_END.dx), z - G.RAMP_END.z) < 3.5) continue;
+        kit.boulder('basalt', k, x + ox, G.LAVA_Y - 0.1, z + oz, 0.7 + R() * 0.8, R() * 6.28, { tint: 0.9 + R() * 0.2 });
+      }
+      for (let k = 0; k < 8; k++) {
+        const x = sx + G.LAVA_X0 + 2 + R() * (G.LAVA_X1 - G.LAVA_X0 - 4);
+        const z = G.LAVA_Z0 + 2 + R() * (G.LAVA_Z1 - G.LAVA_Z0 - 4);
+        if (Math.hypot(x - (sx + G.VAULT.dx), z - G.VAULT.z) < 6) continue;
+        kit.scree('basalt', k, x + ox, G.LAVA_Y - 0.05, z + oz, 0.5 + R() * 0.6, R() * 6.28);
       }
     } else if (ob.type === 'x402-swap') {
       const water = new THREE.Mesh(new THREE.PlaneGeometry(G.RIVER_X1 - G.RIVER_X0 + 1.2, Z1 - Z0 + 4, 8, 30), waterMat);
@@ -473,29 +537,72 @@ export function buildPlot(track: TrackLike, scatter: Scatter): PlotDress {
       dp.position.set(sx - 6, 1.1, -9.25);
       add(dp);
       spots[i] = { x: sx + 1.6, y: 0, z: -14.6, rotY: 0.15 };
+      const sd = 70 + i * 7 + Math.round(Math.abs(oz));
+      cliffParts.push(
+        strataWall({ x0: Z0 + 0.3, x1: Z1 - 0.3, yBase: G.WATER_Y - 3, yTop: 8, capAt: (lx) => sample(sx + G.RIVER_X0 - 0.6, -lx) - 0.05, crest: 0.6, depth: 3, layer: [1.5, 1.8], seed: sd, pal: 'sand', matrix: mat4(H2, sx + G.RIVER_X0 + 0.25, 0) }),
+        strataWall({ x0: Z0 + 0.3, x1: Z1 - 0.3, yBase: G.WATER_Y - 3, yTop: 8, capAt: (lx) => sample(sx + G.RIVER_X1 + 0.6, lx) - 0.05, crest: 0.6, depth: 3, layer: [1.5, 1.8], seed: sd + 1, pal: 'sand', matrix: mat4(-H2, sx + G.RIVER_X1 - 0.25, 0) }),
+      );
+      // boulders in the river bed along both banks (the water runs between them)
+      for (let k = 0; k < 10; k++) {
+        const left = k % 2 === 0;
+        const x = sx + (left ? G.RIVER_X0 + 0.9 + R() * 0.8 : G.RIVER_X1 - 0.9 - R() * 0.8);
+        const z = Z0 + 2 + R() * (Z1 - Z0 - 4);
+        kit.boulder('sand', k, x + ox, G.WATER_Y - 1.2, z + oz, 0.7 + R() * 0.8, R() * 6.28, { tint: 0.8 + R() * 0.15 });
+      }
     } else if (ob.type === 'over-limit') {
-      // overhanging boulders on both wall tops
-      for (let k = 0; k < 7; k++) {
-        const bx = sx - 6 + k * 3.2 + R() * 1.5;
-        const s = 1.4 + R() * 1.4;
-        scatter.boulders.add(bx + ox, sample(bx, -10.2) + s * 0.4, -9.4 + oz, s * 1.2, s, s, R() * 3, R() * 3, R() * 3, '#7d6d58');
+      // the pass: a tall stacked-strata wall on the far side that leans out over the road, a low one on the near side
+      const sd = 90 + i * 7 + Math.round(Math.abs(oz));
+      const FACE = G.WALL_Z_FAR - 1.25;
+      const TOP = 12.5;
+      cliffParts.push(
+        strataWall({ x0: sx - 9.5, x1: sx + 15.5, yBase: -0.6, yTop: TOP, depth: 6.5, overhang: 2.2, crest: 2.4, taper: 5, seed: sd, pal: 'ochre', matrix: mat4(0, 0, FACE) }),
+        strataWall({ x0: -(sx + 15.5), x1: -(sx - 9.5), yBase: -0.6, yTop: 4.6, depth: 3.5, overhang: 0.4, crest: 1.2, taper: 3, seed: sd + 1, pal: 'ochre', matrix: mat4(Math.PI, 0, G.WALL_Z_NEAR + 1.1) }),
+      );
+      // loose boulders perched on the lip — the ones that come down when Sekisho refuses
+      for (let k = 0; k < 8; k++) {
+        const bx = sx - 7 + k * 3 + R() * 1.4;
+        const s = 1.0 + R() * 0.9;
+        kit.boulder('ochre', k, bx + ox, TOP + 0.4 + R() * 0.8, FACE - 0.6 + R() * 0.9 + oz, s, R() * 6.28, { tint: 0.95 + R() * 0.1, tilt: (R() - 0.5) * 0.3 });
       }
       for (let k = 0; k < 5; k++) {
         const bx = sx - 6 + k * 4.5 + R() * 1.5;
-        const s = 1.2 + R() * 1.2;
-        scatter.boulders.add(bx + ox, sample(bx, 23.6) + s * 0.4, 23.4 + oz, s * 1.2, s, s, R() * 3, R() * 3, R() * 3, '#857560');
+        kit.boulder('ochre', k + 2, bx + ox, 4.4, G.WALL_Z_NEAR + 1.6 + R() * 0.8 + oz, 0.8 + R() * 0.7, R() * 6.28);
+      }
+      // scree fans at the foot of the far wall (between the wall and the road edge)
+      for (let k = 0; k < 70; k++) {
+        const x = sx - 9 + R() * 24;
+        const z = FACE + 0.2 + Math.pow(R(), 1.6) * (BAND0 - 0.5 - FACE - 0.2);
+        kit.scree('ochre', k, x + ox, 0, z + oz, 0.18 + R() * 0.4, R() * 6.28, 0.85 + R() * 0.25);
+      }
+      for (let k = 0; k < 4; k++) {
+        const x = sx - 7 + k * 6 + R() * 2;
+        kit.boulder('ochre', k, x + ox, 0, FACE + 0.5 + oz, 0.6 + R() * 0.5, R() * 6.28, { sy: 0.8 });
       }
       const amt = obs[i].amountUsd ?? 40;
       const board = new THREE.Mesh(new THREE.PlaneGeometry(9, 4.5), new THREE.MeshBasicMaterial({ map: priceBoardTexture(amt), toneMapped: false }));
-      board.position.set(sx + 3, 6.2, G.WALL_Z_FAR - 0.25);
+      board.position.set(sx + 3, 6.2, G.WALL_Z_FAR + 0.8);
+      for (const dx of [-3.6, 3.6]) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.35, 4.2, 0.35), M.dark);
+        post.position.set(sx + 3 + dx, 2.0, G.WALL_Z_FAR + 0.3);
+        add(post);
+      }
       add(board);
       const frame = new THREE.Mesh(new THREE.BoxGeometry(9.5, 5, 0.4), M.dark);
-      frame.position.set(sx + 3, 6.2, G.WALL_Z_FAR - 0.5);
+      frame.position.set(sx + 3, 6.2, G.WALL_Z_FAR + 0.55);
       frame.userData.solid = true;
       add(frame);
       spots[i] = { x: sx - 3.5, y: 0, z: -7.9, rotY: 0 };
     }
   });
+
+  if (cliffParts.length) {
+    const cliffs = new THREE.Mesh(mergeGeometries(cliffParts)!, rockMaterial());
+    cliffs.name = 'cliffs';
+    cliffs.castShadow = true;
+    cliffs.receiveShadow = true;
+    cliffs.userData.solid = true;
+    add(cliffs);
+  }
 
   return { heightAt, typeAt, storms, calderas, rivers, meshes, propSpot: (i) => spots[i] ?? null };
 }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { RockKit } from './rockkit';
 
 // World-wide instanced scatter: pines, rocks, boulders, storm clouds. One draw call per kind for the whole world.
 
@@ -62,12 +63,16 @@ export class Scatter {
   rocks: Pool;
   boulders: Pool;
   clouds: Pool;
+  /** v5 crafted rocks (boulders / shards / scree per palette) */
+  kit: RockKit;
   constructor(scene: THREE.Object3D, cloudMat: THREE.Material) {
     const vc = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95 });
     this.pines = new Pool(scene, pineGeo(), vc, 2600, false); // perf: thousands of instances, no shadow pass
+    this.kit = new RockKit(scene);
+    // legacy pools (v4) kept tiny for any external caller; the v5 world places rocks through `kit`
     const rockMat = new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.92, color: 0xffffff });
-    this.rocks = new Pool(scene, new THREE.DodecahedronGeometry(1, 0), rockMat, 2400, false);
-    this.boulders = new Pool(scene, new THREE.IcosahedronGeometry(1, 0), rockMat, 600);
+    this.rocks = new Pool(scene, new THREE.DodecahedronGeometry(1, 0), rockMat, 16, false);
+    this.boulders = new Pool(scene, new THREE.IcosahedronGeometry(1, 0), rockMat, 16);
     this.clouds = new Pool(scene, new THREE.IcosahedronGeometry(1, 1), cloudMat, 1, false);
     this.clouds.mesh.visible = false; // v4 owner call: no weather
   }

@@ -14,7 +14,6 @@ import { WorldCar, loadCarModels } from './car';
 import { buildEnvironment } from './env';
 import { NavCamera } from './nav';
 import { WorldAudio } from './audio';
-import { LANE_DZ, RUNUP_X } from './layout';
 import { MiniMap } from './minimap';
 import { tickProps } from './props';
 import { TrackView, type Slot } from './track';
@@ -108,7 +107,8 @@ export async function mountWorld(root: HTMLElement) {
     nav?.glideTo(p, 90);
   });
   const audio = new WorldAudio(); // nav + audio lane: WebAudio starts on the first gesture
-  const hints = '<b>Click</b> walk in · <b>WASD</b> move · <b>Space</b> jump · <b>Shift</b> sprint · <b>F</b> fly · <b>E</b> ride a car · <b>V</b> view · <b>M</b> sound';
+  const hints =
+    '<b>Arrows/WASD</b> move · <b>drag</b> pan · <b>right-drag</b> tilt · <b>scroll</b> dive in · <b>click a car</b> to follow · <b>Space</b>: latest crash';
   const hud = createHud(wrap, store, { mock, minimap: minimap.el, sub: 'open proving ground × sekisho 関所', sound: audio, hints });
 
   let renderer: THREE.WebGLRenderer;
@@ -132,6 +132,7 @@ export async function mountWorld(root: HTMLElement) {
   const biomes = new BiomeWorld(scene, env.hemi);
   nav = new NavCamera(canvas);
   nav.resize(window.innerWidth, window.innerHeight);
+  nav.setGroundProvider((x, z) => biomes.groundAt(x, z));
   const hsCam = new HighSpeedCam();
   const smoke = new SmokePool(scene, 64);
 
@@ -195,6 +196,7 @@ export async function mountWorld(root: HTMLElement) {
     const b = new THREE.Box3();
     for (const t of tracks.values()) allBounds.union(t.bounds(b));
     env.fit(allBounds);
+    nav?.setBounds(allBounds);
   }
   function ensureTrack(spec: TrackSpec): TrackView {
     let t = tracks.get(spec.id);
@@ -636,8 +638,7 @@ export async function mountWorld(root: HTMLElement) {
   const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   const pick = (ev: MouseEvent) => {
     const r = canvas.getBoundingClientRect();
-    if (nav!.locked) ndc.set(0, 0); // walking: the crosshair
-    else ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+    ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
     raycaster.setFromCamera(ndc, nav!.camera);
   };
   let following = '';
@@ -706,7 +707,7 @@ export async function mountWorld(root: HTMLElement) {
 
   let downAt = { x: 0, y: 0 };
   canvas.addEventListener('pointerdown', (e) => (downAt = { x: e.clientX, y: e.clientY }));
-  /** Ride along with the car under the ray (click, or E at the crosshair while walking). */
+  /** Follow the car under the ray (click / tap). */
   const rideAt = (ray: THREE.Raycaster) => {
     const carObjs: THREE.Object3D[] = [];
     for (const a of actors.values()) for (const v of ['bare', 'airbag'] as const) carObjs.push(a.lanes[v].car.group);
@@ -720,7 +721,6 @@ export async function mountWorld(root: HTMLElement) {
     return true;
   };
   canvas.addEventListener('click', (e) => {
-    if (nav!.consumeClick()) return; // walking but paused: the click resumes
     if (Math.abs(e.clientX - downAt.x) + Math.abs(e.clientY - downAt.y) > 5) return;
     tour.stop();
     nav!.lastInput = performance.now();
@@ -738,25 +738,23 @@ export async function mountWorld(root: HTMLElement) {
   });
   canvas.addEventListener('dblclick', (e) => {
     pick(e);
-    const p = raycaster.ray.intersectPlane(ground, new THREE.Vector3());
+    const p = nav!.pickGround(e.clientX, e.clientY) ?? raycaster.ray.intersectPlane(ground, new THREE.Vector3());
     if (p) {
       tour.stop();
-      nav!.glideTo(p, 60);
+      nav!.glideTo(p, 40);
     }
   });
   const onKey = (e: KeyboardEvent) => {
     const tag = (e.target as HTMLElement)?.tagName;
     if (e.code === 'KeyM' && tag !== 'INPUT' && tag !== 'TEXTAREA') audio.toggle();
-    if (e.key === 'Escape' && nav!.view === 'walk') {
-      hideReport(); // walking: Esc only frees the mouse (nav)
-      return;
-    }
     if (e.key === 'Escape') {
       hideReport();
       following = '';
       tour.stop();
       nav!.lastInput = performance.now();
-      frameAll();
+      // Esc releases a followed car where it is; a second Esc (or Esc while free) pulls back to the overview
+      if (nav!.mode === 'follow') nav!.release();
+      else frameAll();
     }
   };
   window.addEventListener('keydown', onKey);
@@ -764,14 +762,10 @@ export async function mountWorld(root: HTMLElement) {
     touched = true;
     tour.stop();
   };
-  // nav + audio lane wiring: spawn deck, biome lookup, crosshair ride, views, gesture → audio, footsteps
+  // nav + audio lane wiring: biome under the screen centre → ambient bed, first gesture → audio unlock
   const biomeBox = new THREE.Box3();
   nav.attach({
     scene,
-    spawn: () => {
-      const t = tracks.get(DEFAULT_TRACK_ID) ?? [...tracks.values()][0];
-      return t ? { x: t.origin.x + RUNUP_X - 16, z: t.origin.z - LANE_DZ / 2, yaw: -Math.PI / 2 } : null;
-    },
     biomeAt: (x, z) => {
       let best: TrackView | null = null;
       let bd = Infinity;
@@ -795,14 +789,9 @@ export async function mountWorld(root: HTMLElement) {
       }
       return best.type(i);
     },
-    use: (ray) => rideAt(ray),
-    onView: (v) => (v === 'tour' ? tour.start() : tour.stop()),
     onGesture: () => audio.unlock(),
-    onStep: (s, sprint) => audio.footstep(s, sprint),
-    onLand: (v) => audio.land(v),
   });
   audio.attach(nav.camera);
-  minimap.player = () => nav!.marker();
 
   // debug / screenshot hooks
   const api = {

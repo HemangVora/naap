@@ -121,7 +121,8 @@ export class BiomeWorld {
       if (Math.hypot((x + 360) / 180, (z - 170) / 120) < 1.1) continue; // the lake
       const s = 0.9 + R() * 1.1;
       if (R() < 0.8) this.scatter.pines.add(x, VALLEY_Y - 0.3, z, s, s * (0.8 + R() * 0.6), s, 0, R() * 6, 0);
-      else this.scatter.rocks.add(x, VALLEY_Y + s * 0.3, z, s * 2, s * 1.2, s * 1.6, R() * 3, R() * 3, R() * 3, R() < 0.5 ? '#8c8a80' : '#76736a');
+      else if (R() < 0.3) this.scatter.kit.cluster('granite', R, x, z, 1.4 + s * 1.2, () => VALLEY_Y - 0.1);
+      else this.scatter.kit.boulder('granite', Math.floor(R() * 6), x, VALLEY_Y - 0.1, z, s * 1.4, R() * 6.28, { tint: 0.85 + R() * 0.2, tilt: (R() - 0.5) * 0.2 });
     }
     // birches of pines ring the lake
     for (let i = 0; i < 120; i++) {

@@ -21,6 +21,7 @@ import {
   WALL_Z_FAR,
   WATER_Y,
 } from '../biomes/geo';
+import { paintedBoulder, rockMaterial } from '../biomes/rockkit';
 
 // v4 biome deaths: deterministic f(t) sims (like v2 CrashSim) so the high-speed-cam inset can replay any moment.
 // t = 0 is the moment the car leaves its lane (for RockfallSim: the first boulder lets go).
@@ -60,8 +61,9 @@ const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 let R: ReturnType<typeof makeRes> | null = null;
 function makeRes() {
   return {
-    rock: new THREE.IcosahedronGeometry(1, 0),
-    boulder: new THREE.DodecahedronGeometry(1, 0),
+    rock: paintedBoulder('granite', 7101, 0),
+    boulder: paintedBoulder('ochre', 7203, 1),
+    pebble: paintedBoulder('ochre', 7305, 0),
     puff: new THREE.IcosahedronGeometry(1, 1),
     plank: new THREE.BoxGeometry(2.2, 0.32, 0.12),
     drop: new THREE.IcosahedronGeometry(0.12, 0),
@@ -266,7 +268,7 @@ export class CliffFallSim extends Base implements DeathSim {
     const r = res();
     this.rail = this.track(new Ballistic(this.root, r.plank, r.steelMat, 3));
     for (let i = 0; i < 3; i++) this.rail.add(this.T1 - 0.02, this.xr - 1.6 + i * 1.6, 0.7, RAIL_Z, rnd(3, 7), rnd(3, 6), rnd(-6, -3), 1, CLIFF_FLOOR_Y + 0.15);
-    this.rocks = this.track(new Ballistic(this.root, r.rock, r.rockMat, 26));
+    this.rocks = this.track(new Ballistic(this.root, r.rock, rockMaterial(), 26));
     for (let i = 0; i < 26; i++)
       this.rocks.add(this.T1 + 0.15 + i * 0.06, this.xr + rnd(-2.5, 3), rnd(-1.2, 0), CLIFF_Z - 0.2, rnd(-1, 2), rnd(-1, 1.5), rnd(-3.5, -1), rnd(0.15, 0.55), CLIFF_FLOOR_Y + 0.2);
     this.dust = this.track(new Puffs(this.root, 44));
@@ -667,15 +669,23 @@ export class WaterSim extends Base implements DeathSim {
 }
 
 // ── rockfall (boulders only; the Sekisho car stays stopped behind them) ────
+// Each boulder: falls off the lip (spinning), hits the road, takes 2–3 decaying bounces while rolling (angular velocity
+// = ground speed / radius about the axis ⟂ to its travel), then settles flat-side-down with a small rock. All f(t).
+const qA = new THREE.Quaternion();
+const qB = new THREE.Quaternion();
+const qC = new THREE.Quaternion();
+const axis = new THREE.Vector3();
+const UP = new THREE.Vector3(0, 1, 0);
 export class RockfallSim extends Base implements DeathSim {
   death = 'rockfall' as const;
   duration = 3.5;
   replay = { from: 0, to: 3.2, rate: 0.6 };
   exitX: number;
   private n: number;
-  private s: Float32Array; // t0, x0, y0, z0, x1, z1, r, xr, zr, spin, tImpact
+  private s: Float32Array; // t0, x0, y0, z0, x1, z1, r, xr, zr, spin, tImpact, yaw, ax, az, h1, tRoll
   private rocks: THREE.InstancedMesh;
   private dust: Puffs;
+  private static N = 16;
   constructor(parent: THREE.Object3D, private xLand: number, laneZ: number, restore: () => void, private opts: { small?: boolean } = {}) {
     super(parent, laneZ, restore);
     this.exitX = xLand;
@@ -683,55 +693,118 @@ export class RockfallSim extends Base implements DeathSim {
     const small = !!opts.small;
     this.n = small ? 6 : 7;
     const r = res();
-    this.rocks = new THREE.InstancedMesh(small ? r.rock : r.boulder, r.rockMat, this.n);
+    this.rocks = new THREE.InstancedMesh(small ? r.pebble : r.boulder, rockMaterial(), this.n);
     this.rocks.castShadow = true;
     this.rocks.frustumCulled = false;
     const col = new THREE.Color();
-    for (let i = 0; i < this.n; i++) this.rocks.setColorAt(i, col.setHSL(0.08, 0.12, rnd(0.32, 0.5)));
+    for (let i = 0; i < this.n; i++) this.rocks.setColorAt(i, col.setScalar(rnd(0.88, 1.08)));
     this.root.add(this.rocks);
     this.meshes.push(this.rocks);
-    this.dust = this.track(new Puffs(this.root, 60));
-    this.s = new Float32Array(this.n * 11);
+    this.dust = this.track(new Puffs(this.root, 90));
+    const N = RockfallSim.N;
+    this.s = new Float32Array(this.n * N);
     for (let i = 0; i < this.n; i++) {
-      const rad = small ? rnd(0.2, 0.38) : rnd(0.7, 1.3);
+      const rad = small ? rnd(0.2, 0.38) : rnd(0.7, 1.25);
       const t0 = i * (small ? 0.18 : 0.12) + rnd(0, 0.08);
       const x0 = xLand + rnd(-1, 5);
-      const y0 = rnd(14, 18);
-      const z0 = WALL_Z_FAR + rnd(-0.5, 0.8);
+      const y0 = rnd(13.5, 16.5);
+      const z0 = WALL_Z_FAR + rnd(-0.5, 0.6);
       const x1 = small ? xLand + rnd(-1, 4) : xLand + 0.4 + (i / this.n) * 3.8 + rnd(-0.4, 0.4);
       const z1 = small ? laneZ - rnd(0.5, 2) : laneZ + rnd(-2.2, 0.4);
-      const tImp = Math.sqrt((2 * (y0 - rad)) / G);
+      const tImp = Math.sqrt((2 * (y0 - rad * 0.5)) / G);
       const xr = small ? x1 + rnd(-1, 2) : xLand + 0.3 + (i / this.n) * 4 + rnd(-0.3, 0.3);
       const zr = small ? laneZ + rnd(5, 9) : laneZ + rnd(-1.5, 1.5);
-      this.s.set([t0, x0, y0, z0, x1, z1, rad, xr, zr, rnd(3, 7), tImp], i * 11);
+      const h1 = small ? rnd(0.5, 0.9) : rnd(0.9, 1.5);
+      const tRoll = small ? 1.3 : 1.1;
+      const a = rnd(0, Math.PI * 2);
+      this.s.set([t0, x0, y0, z0, x1, z1, rad, xr, zr, rnd(3, 7) * (Math.random() < 0.5 ? -1 : 1), tImp, rnd(0, 6.28), Math.cos(a), Math.sin(a), h1, tRoll], i * N);
+      // dust at the impact and at each bounce landing
+      const tb = this.bounceTimes(h1);
       this.dust.burst(t0 + tImp, x1, 0, z1, small ? 2 : 7, small ? 0.6 : 1.8);
+      for (let k = 0; k < tb.length; k++) {
+        const u = tb[k] / tRoll;
+        const e = easeOut(Math.min(1, u));
+        this.dust.burst(t0 + tImp + tb[k], lerp(x1, xr, e), 0, lerp(z1, zr, e), small ? 1 : Math.max(2, 5 - k * 2), (small ? 0.4 : 1.2) * (1 - k * 0.25));
+      }
       if (i === 0) this.cues.push({ t: t0 + tImp, kind: 'dust', x: x1, y: 0, z: z1 });
     }
     this.cues.push({ t: 0, kind: 'rumble', x: xLand, y: 10, z: WALL_Z_FAR });
     this.apply(0);
   }
+  /** end times of the decaying bounces after the impact (s, relative to the impact) */
+  private bounceTimes(h1: number) {
+    const out: number[] = [];
+    let t = 0;
+    let h = h1;
+    for (let k = 0; k < 3; k++) {
+      t += 2 * Math.sqrt((2 * h) / G);
+      out.push(t);
+      h *= 0.35;
+    }
+    return out;
+  }
   apply(t: number) {
     const s = this.s;
+    const N = RockfallSim.N;
     for (let i = 0; i < this.n; i++) {
-      const o = i * 11;
+      const o = i * N;
       const t0 = s[o], x0 = s[o + 1], y0 = s[o + 2], z0 = s[o + 3], x1 = s[o + 4], z1 = s[o + 5];
       const rad = s[o + 6], xr = s[o + 7], zr = s[o + 8], spin = s[o + 9], tImp = s[o + 10];
+      const yaw = s[o + 11], h1 = s[o + 14], tRoll = s[o + 15];
       const tau = t - t0;
-      let ang = 0;
-      if (tau < 0) tmpO.position.set(x0, y0, z0);
-      else if (tau < tImp) {
+      const rest = rad * 0.5; // flat bottom at y = -0.5·rad
+      qA.setFromAxisAngle(UP, yaw);
+      if (tau < 0) {
+        tmpO.position.set(x0, y0, z0);
+        tmpO.quaternion.copy(qA);
+      } else if (tau < tImp) {
+        // free fall off the lip: tumbling about a fixed tilted axis
         const u = tau / tImp;
         tmpO.position.set(lerp(x0, x1, u), y0 - 0.5 * G * tau * tau, lerp(z0, z1, u));
-        ang = spin * tau;
+        axis.set(s[o + 12], 0.3, s[o + 13]).normalize();
+        qB.setFromAxisAngle(axis, spin * tau);
+        tmpO.quaternion.multiplyQuaternions(qB, qA);
       } else {
         const b = tau - tImp;
-        const bt = this.opts.small ? 1.1 : 0.75;
-        const u = Math.min(1, b / bt);
-        const hop = this.opts.small ? 1.2 * Math.abs(Math.sin(u * Math.PI * 2)) * (1 - u) : 1.4 * Math.sin(Math.min(1, u * 1.5) * Math.PI) * (1 - u * 0.6);
-        tmpO.position.set(lerp(x1, xr, easeOut(u)), rad * 0.85 + Math.max(0, hop), lerp(z1, zr, easeOut(u)));
-        ang = spin * tImp + spin * 0.6 * bt * easeOut(u);
+        const tb = this.bounceTimes(h1);
+        // vertical: decaying parabolic hops, then resting
+        let y = rest;
+        let prev = 0;
+        let h = h1;
+        for (let k = 0; k < tb.length; k++) {
+          if (b < tb[k]) {
+            const d = tb[k] - prev;
+            const w = (b - prev) / d;
+            y = rest + 4 * h * w * (1 - w);
+            break;
+          }
+          prev = tb[k];
+          h *= 0.35;
+        }
+        // horizontal: decelerating roll to the rest spot
+        const u = Math.min(1, b / tRoll);
+        const e = easeOut(u);
+        const dx = xr - x1;
+        const dz = zr - z1;
+        const dist = Math.hypot(dx, dz) * e;
+        tmpO.position.set(x1 + dx * e, y, z1 + dz * e);
+        // tumble: the fall spin carried over + rolling (angle = distance / radius) about the axis ⟂ to travel
+        axis.set(s[o + 12], 0.3, s[o + 13]).normalize();
+        qB.setFromAxisAngle(axis, spin * tImp);
+        axis.set(dz, 0, -dx).normalize();
+        if (axis.lengthSq() < 0.5) axis.set(0, 0, 1);
+        qC.setFromAxisAngle(axis, dist / Math.max(0.15, rad) + spin * 0.15 * Math.min(b, 0.6));
+        tmpO.quaternion.multiplyQuaternions(qC, qB).multiply(qA);
+        // settle: rock onto the flat bottom over the last part of the roll, with a small damped rock
+        const settle = smooth(0.6, 1, u);
+        if (settle > 0) {
+          qB.setFromAxisAngle(UP, yaw + dist * 0.2);
+          const wob = settle >= 1 ? 0.06 * Math.sin((b - tRoll) * 12) * Math.exp(-4 * (b - tRoll)) : 0;
+          qC.setFromAxisAngle(axis, wob);
+          qB.premultiply(qC);
+          tmpO.quaternion.slerp(qB, settle);
+        }
       }
-      tmpO.rotation.set(ang, ang * 0.6, i);
       tmpO.scale.setScalar(tau < -0.5 ? 0 : rad);
       tmpO.updateMatrix();
       this.rocks.setMatrixAt(i, tmpO.matrix);
