@@ -216,8 +216,11 @@ export function mockGuardApi(): GuardApi {
         /only the owner|onlyowner|access.control|safe/.test(p) ? PRESETS[3]
         : /price|oracle|lend|collateral/.test(p) ? PRESETS[2]
         : /mint|token|faucet|reward|erc20/.test(p) ? PRESETS[1]
-        : PRESETS[0];
-      return { source: pick.source, name: nameOf(pick.source) ?? 'Contract' };
+        : /vault|deposit|withdraw|usdc|stak/.test(p) ? PRESETS[0]
+        : undefined;
+      // nothing matched: behave like the server's fallback (model gave nothing usable → closest preset, flagged)
+      const src = (pick ?? PRESETS[0]).source;
+      return { source: src, name: nameOf(src) ?? 'Contract', ...(pick ? {} : { preset: true }) };
     },
     async audit(source: string) {
       await wait(1400);

@@ -50,9 +50,16 @@ export interface GuardPreset {
 /** Client-side mirrors of the server limits (the server enforces them too). */
 export const GUARD_LIMITS = { promptMax: 600, sourceMaxBytes: 12 * 1024 } as const;
 
+/** A drafted contract. `preset` is set when the model gave nothing usable and the server sent the closest preset. */
+export interface GuardDraft {
+  source: string;
+  name: string;
+  preset?: boolean;
+}
+
 export interface GuardApi {
   presets(): Promise<{ presets: GuardPreset[] }>;
-  draft(prompt: string): Promise<{ source: string; name: string }>;
+  draft(prompt: string): Promise<GuardDraft>;
   audit(source: string): Promise<{ report: GuardReport }>;
 }
 
@@ -65,7 +72,7 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const getPresets = () => call<{ presets: GuardPreset[] }>('/api/guard/presets');
 export const draftContract = (prompt: string) =>
-  call<{ source: string; name: string }>('/api/guard/draft', { method: 'POST', body: JSON.stringify({ prompt }) });
+  call<GuardDraft>('/api/guard/draft', { method: 'POST', body: JSON.stringify({ prompt }) });
 export const auditContract = (source: string) =>
   call<{ report: GuardReport }>('/api/guard/audit', { method: 'POST', body: JSON.stringify({ source }) });
 

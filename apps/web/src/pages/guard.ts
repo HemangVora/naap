@@ -180,10 +180,15 @@ export async function mountGuard(root: HTMLElement) {
     write.classList.add('busy');
     syncMeta();
     try {
-      const { source: src, name } = await api.draft(p);
+      const { source: src, name, preset } = await api.draft(p);
       if (seq !== sourceSeq) return; // a preset was picked meanwhile
       activePreset = null;
-      setSource(src, `The agent wrote ${name || 'a contract'} for your request. Review it, edit it, then audit.`);
+      setSource(
+        src,
+        preset
+          ? `The model couldn’t write that one — here’s the closest preset: ${name || 'a contract'}. Edit it freely, then audit.`
+          : `The agent wrote ${name || 'a contract'} for your request. Review it, edit it, then audit.`,
+      );
       source.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } catch (e) {
       show(perr, `Could not write it. ${(e as Error).message}`);
@@ -231,6 +236,9 @@ export async function mountGuard(root: HTMLElement) {
     out.hidden = false;
     const findings = [...r.findings].sort((a, b) => Number(!!b.confirmed) - Number(!!a.confirmed) || SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
     const proven = findings.filter((f) => f.confirmed);
+    const serious = findings.filter((f) => f.severity === 'critical' || f.severity === 'high');
+    /** Findings whose attacker call ran on the fork and reverted (the engine downgrades them to "Unconfirmed: …"). */
+    const blocked = findings.filter((f) => f.title.startsWith('Unconfirmed:'));
     const drained = proven.reduce((s, f) => s + (f.confirmed?.stolenUsd ?? 0), 0);
     const time = new Date(r.auditedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
@@ -243,12 +251,17 @@ export async function mountGuard(root: HTMLElement) {
       headline = 'Vulnerable';
       sub = proven.length
         ? `${proven.length} flaw${proven.length === 1 ? '' : 's'} proven on the fork${drained ? `, ${usd(drained)} drained by a stranger` : ''}. Do not ship this.`
-        : `${findings.length} flaw${findings.length === 1 ? '' : 's'} found by the static scan. Do not ship this.`;
+        : `${serious.length} flaw${serious.length === 1 ? '' : 's'} found by the static scan. Do not ship this.`;
     } else {
       headline = 'Safe';
-      sub = r.address
-        ? `A stranger’s wallet tried every check the guard knows; each call reverted.${findings.length ? ` ${findings.length} note${findings.length === 1 ? '' : 's'} below, none exploitable.` : ''}`
-        : 'The static scan found none of the flaw classes it checks.';
+      const notes = findings.length ? ` ${findings.length} note${findings.length === 1 ? '' : 's'} below to review.` : '';
+      sub = !r.address
+        ? `Static scan only: it found none of the flaw classes it checks. The contract was not deployed, so nothing was attacked.${notes}`
+        : blocked.length
+          ? `${blocked.length} attack call${blocked.length === 1 ? '' : 's'} reverted on the fork.${notes}`
+          : findings.length
+            ? `Deployed to the sandbox; nothing the guard tried got through.${notes}`
+            : 'Deployed to the sandbox. The scan found none of the flaw classes it checks, so there was nothing to attack.';
     }
 
     const where = r.address

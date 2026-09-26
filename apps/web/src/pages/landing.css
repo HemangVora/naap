@@ -334,6 +334,7 @@ html.naap-landing #app { height: auto; }
 }
 
 @media (max-width: 820px) {
+  .lp-nav nav a[href="/guard"] { display: none; } /* no room in the nav; /guard stays in the hero CTAs */
   .lp-inc-cols { display: none; }
   .lp-inc-row { grid-template-columns: minmax(0, 1fr) auto; gap: 12px 16px; }
   .lp-inc-loss { text-align: right; }

@@ -108,6 +108,7 @@ export function mountLanding(root: HTMLElement) {
     <nav aria-label="Primary">
       <a href="/world">The world</a>
       <a href="/tracks/new">Build a track</a>
+      <a href="/guard">Deploy Guard →</a>
       <a href="#mcp" data-scroll="mcp">MCP</a>
     </nav>
   </header>
@@ -121,6 +122,7 @@ export function mountLanding(root: HTMLElement) {
       <a class="lp-btn lp-btn-go" href="/world">Enter the world →</a>
       <a class="lp-btn lp-btn-test" href="/join">Crash-test your agent</a>
       <a class="lp-btn lp-btn-quiet" href="#mcp" data-scroll="mcp">Connect via MCP</a>
+      <a class="lp-btn lp-btn-quiet" href="/guard">Deploy Guard →</a>
     </div>
     </div>
   </section>
@@ -270,6 +272,7 @@ export function mountLanding(root: HTMLElement) {
     <nav aria-label="Footer">
       <a href="/world">The world</a>
       <a href="/join">Crash-test your agent</a>
+      <a href="/guard">Deploy Guard</a>
       <a href="/classic">Classic arena</a>
       <a href="https://github.com/HemangVora/naap" rel="noopener">GitHub</a>
     </nav>
