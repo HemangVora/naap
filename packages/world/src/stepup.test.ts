@@ -109,7 +109,7 @@ describe('createStepUp (live, owner car)', () => {
     expect(r.status).toBe('APPROVED');
     expect(r.subject).toBe('sub_pairwise_abcdef0123456789');
     expect(r.authTime).toBeGreaterThanOrEqual(Math.floor(t0 / 1000) - 60);
-    expect(r.detail).toMatch(/^Owner approved with World ID \(sub_pa…6789\) — fresh proof \d+ s after the request$/);
+    expect(r.detail).toMatch(/^Owner approved \(sub_pa…6789\) — fresh approval \d+ s after the request$/);
     // 4 polls: 5 s, 5 s, then +5 s after slow_down → 10 s, 10 s = 30 s total elapsed
     expect(c.now() - t0).toBe(30_000);
     const polls = m.calls.filter((x) => x.url.endsWith('/api/v1/token'));
@@ -124,7 +124,7 @@ describe('createStepUp (live, owner car)', () => {
     const m = mockFetch({ nowSec: c.sec, tokenSteps: [{ status: 400, body: { error: 'authorization_pending' } }, { status: 400, body: { error: 'access_denied' } }] });
     const r = await (await live(m.fetch, c).request(ownerReq)).result;
     expect(r.status).toBe('DENIED');
-    expect(r.detail).toBe('Owner denied the request in World App — payment refused');
+    expect(r.detail).toBe('Owner denied the approval request — payment refused');
   });
 
   it('EXPIRED at our ttl when nobody approves (device code still alive)', async () => {

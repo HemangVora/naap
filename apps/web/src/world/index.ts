@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { ArenaEvent, BarrierId, RunReport, TrackSpec, Variant } from '../types';
-import { ATTACK_TYPES, BARRIER_SHORT, DEFAULT_TRACK_ID, fmtUsd } from '../types';
+import { ATTACK_TYPES, BARRIER_SHORT, DEFAULT_TRACK_ID, controlLabel, fmtUsd } from '../types';
 import { Store } from '../store';
 import { connectFeed, isMock } from '../feed';
 import { el, esc, starsText } from '../dom';
@@ -326,7 +326,7 @@ export async function mountWorld(root: HTMLElement) {
     floaters.push({ node, pos: pos.clone(), until: performance.now() + ms });
   }
   const lanePos = (a: CarActor, l: LaneActor, dx = 0) => worldOf(a, new THREE.Vector3(l.car.group.position.x + dx, 3.4, l.car.group.position.z));
-  const chipsFor = (blockedBy: string[]) => blockedBy.map((c) => c.replace('PROVENANCE_', 'PROV·').replace('MANDATE_', 'MANDATE·').replace('_', '·'));
+  const chipsFor = (blockedBy: string[]) => blockedBy.map((c) => controlLabel(c).replace('PROVENANCE_', 'PROV·').replace('MANDATE_', 'MANDATE·').replace('_', '·'));
   const noseLen = (car: WorldCar) => (NOSE_X - CRUSH_MAX * car.crush) * CAR_SCALE;
   const asScene = (t: TrackView) => t.group as unknown as THREE.Scene;
 
@@ -494,10 +494,10 @@ export async function mountWorld(root: HTMLElement) {
         const a = spawn(e.carId);
         const g = a.slot.gates[stepOf(e.carId, 'airbag', e.step)];
         if (!g) break;
-        g.setState('stepup', e.summary, e.canApprove ? ['CAP·TX', 'WORLD ID'] : ['CAP·TX', 'NO OWNER']);
+        g.setState('stepup', e.summary, e.canApprove ? ['CAP·TX', 'OWNER'] : ['CAP·TX', 'NO OWNER']);
         gateFx(a, stepOf(e.carId, 'airbag', e.step), 'amber');
         g.startStepUp(Date.now(), e.expiresAt * 1000);
-        floater('STEP UP · World ID', lanePos(a, a.lanes.airbag, 1), 'amber');
+        floater('STEP UP · owner approval', lanePos(a, a.lanes.airbag, 1), 'amber');
         break;
       }
       case 'stepup.resolved': {
@@ -506,8 +506,8 @@ export async function mountWorld(root: HTMLElement) {
         if (l.step === undefined) break;
         const g = a.slot.gates[l.step];
         if (!g) break;
-        if (e.result.status === 'APPROVED') g.setState('paid', `Owner approved via World ID${e.result.subject ? ` · ${e.result.subject}` : ''}`, ['WORLD ✓']);
-        else g.setState('expired', e.result.detail, [e.result.status === 'DENIED' ? 'WORLD·DENIED' : 'WORLD·EXPIRED']);
+        if (e.result.status === 'APPROVED') g.setState('paid', `Owner approved${e.result.subject ? ` · ${e.result.subject}` : ''}`, ['OWNER ✓']);
+        else g.setState('expired', e.result.detail, [e.result.status === 'DENIED' ? 'OWNER·DENIED' : 'OWNER·EXPIRED']);
         gateFx(a, l.step, e.result.status === 'APPROVED' ? 'open' : 'close');
         break;
       }
@@ -554,7 +554,7 @@ export async function mountWorld(root: HTMLElement) {
           const target = a.slot.targets[step];
           const chips = chipsFor(r.blockedBy);
           if (r.outcome === 'PAID') {
-            g.setState('paid', r.barrierId === 'over-limit' ? r.reason : `Paid ${fmtUsd(1)} · compute.naap.eth`, r.barrierId === 'over-limit' ? ['WORLD ✓', 'PAID'] : ['PAID']);
+            g.setState('paid', r.barrierId === 'over-limit' ? r.reason : `Paid ${fmtUsd(1)} · compute.naap.eth`, r.barrierId === 'over-limit' ? ['OWNER ✓', 'PAID'] : ['PAID']);
             target?.raise(true);
             gateFx(a, step, 'open');
             revive(l);

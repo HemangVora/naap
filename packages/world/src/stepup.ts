@@ -88,9 +88,9 @@ class LiveStepUp implements WorldStepUp {
     try {
       da = await this.client.deviceAuthorization();
     } catch (e) {
-      const msg = e instanceof OidcError ? e.message : `World sandbox unreachable: ${(e as Error).message}`;
+      const msg = e instanceof OidcError ? e.message : `approval provider unreachable: ${(e as Error).message}`;
       this.log(`step-up ${id}: could not start device grant — ${msg}`);
-      const detail = `World step-up could not start (${msg}) — payment refused`;
+      const detail = `Owner approval could not start (${msg}) — payment refused`;
       return { id, expiresAt: requestedAt, result: Promise.resolve({ status: 'EXPIRED', detail }) };
     }
     const deviceExpiry = requestedAt + da.expires_in * 1000;
@@ -128,9 +128,9 @@ class LiveStepUp implements WorldStepUp {
           interval += 5000;
           continue;
         case 'denied':
-          return this.finish(id, { status: 'DENIED', detail: 'Owner denied the request in World App — payment refused' });
+          return this.finish(id, { status: 'DENIED', detail: 'Owner denied the approval request — payment refused' });
         case 'expired':
-          return this.finish(id, { status: 'EXPIRED', detail: 'World device code expired before approval — payment refused' });
+          return this.finish(id, { status: 'EXPIRED', detail: 'Approval device code expired before approval — payment refused' });
         case 'error':
           if (r.status === 0 || r.status === 429) {
             // transient: back off and keep trying until our own ttl
@@ -138,7 +138,7 @@ class LiveStepUp implements WorldStepUp {
             this.log(`step-up ${id}: transient poll failure (${r.error}); backing off`);
             continue;
           }
-          return this.finish(id, { status: 'EXPIRED', detail: `World sandbox error (${r.error}) — payment refused` });
+          return this.finish(id, { status: 'EXPIRED', detail: `Approval provider error (${r.error}) — payment refused` });
         case 'token':
           return this.finish(id, await this.validate(r.id_token, requestedAt));
       }
@@ -152,20 +152,20 @@ class LiveStepUp implements WorldStepUp {
       payload = await this.client.verifyIdToken(idToken);
     } catch (e) {
       const why = describeJoseError(e);
-      return { status: 'DENIED', detail: `World ID token rejected (${why}) — payment refused` };
+      return { status: 'DENIED', detail: `Owner approval token rejected (${why}) — payment refused` };
     }
     const sub = String(payload.sub);
     const authTime = Number(payload.auth_time);
     const requestedSec = Math.floor(requestedAt / 1000);
     if (!Number.isFinite(authTime)) {
-      return { status: 'DENIED', subject: sub, detail: 'World ID token rejected (no auth_time) — payment refused' };
+      return { status: 'DENIED', subject: sub, detail: 'Owner approval token rejected (no auth_time) — payment refused' };
     }
     if (authTime < requestedSec - this.skewSec) {
       return {
         status: 'DENIED',
         subject: sub,
         authTime,
-        detail: `World ID proof is stale (auth_time ${requestedSec - authTime} s before the request) — payment refused`,
+        detail: `Owner approval is stale (auth_time ${requestedSec - authTime} s before the request) — payment refused`,
       };
     }
     const after = Math.max(0, authTime - requestedSec);
@@ -173,7 +173,7 @@ class LiveStepUp implements WorldStepUp {
       status: 'APPROVED',
       subject: sub,
       authTime,
-      detail: `Owner approved with World ID (${shortSub(sub)}) — fresh proof ${after} s after the request`,
+      detail: `Owner approved (${shortSub(sub)}) — fresh approval ${after} s after the request`,
     };
   }
 

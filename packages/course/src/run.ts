@@ -322,7 +322,7 @@ async function runAirbag(
         t: 'stepup.pending', carId: car.id, runId, barrierId: barrier.id, step, summary,
         verificationUri: handle.verificationUri, userCode: handle.userCode, expiresAt: handle.expiresAt, canApprove: isOwner,
       });
-      trace('stepup', `${summary} — waiting for ${isOwner ? 'owner (World ID)' : 'nobody: audience car, expires'}`);
+      trace('stepup', `${summary} — waiting for ${isOwner ? 'owner approval' : 'nobody: audience car, expires'}`);
       stepUp = await handle.result;
       emit({ t: 'stepup.resolved', carId: car.id, runId, result: stepUp });
       trace('stepup', `${stepUp.status}: ${stepUp.detail}`);

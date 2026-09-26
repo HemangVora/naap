@@ -36,7 +36,7 @@ export function priceBoardTexture(amount: number) {
     g.fillText(`${amt} > $5`, 512, 330);
     g.font = font(56, 700);
     g.fillStyle = '#f2efe8';
-    g.fillText('compute.naap.eth · owner step-up · World ID', 512, 440);
+    g.fillText('compute.naap.eth · owner approval', 512, 440);
   });
 }
 
