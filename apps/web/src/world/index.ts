@@ -126,6 +126,8 @@ export async function mountWorld(root: HTMLElement) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
+  // the error check reads each new program's link status back synchronously (a stalled frame); dev only
+  renderer.debug.checkShaderErrors = import.meta.env.DEV;
 
   const scene = new THREE.Scene();
   const env = buildEnvironment(scene);
@@ -198,6 +200,28 @@ export async function mountWorld(root: HTMLElement) {
     env.fit(allBounds);
     nav?.setBounds(allBounds);
   }
+  // Link every material's shader up front, in parallel where the driver allows: otherwise each one links the first time
+  // it scrolls into view or its LOD / label switches on, and the camera hitches mid-drag. compile() only walks visible
+  // objects, so hidden ones are shown for the (synchronous) program setup and hidden again before any frame draws.
+  function warmNow(root: THREE.Object3D) {
+    if (!nav) return;
+    const hidden: THREE.Object3D[] = [];
+    root.traverse((o) => {
+      // lights stay as they are: the light count is part of every lit program's key
+      if (!o.visible && !(o as THREE.Light).isLight) {
+        hidden.push(o);
+        o.visible = true;
+      }
+    });
+    renderer.compileAsync(root, nav.camera, scene).catch(() => {});
+    for (const o of hidden) o.visible = false;
+  }
+  let warmTimer = 0;
+  /** Whole scene, debounced (new plots arrive in bursts). */
+  function warmShaders() {
+    window.clearTimeout(warmTimer);
+    warmTimer = window.setTimeout(() => warmNow(scene), 60);
+  }
   function ensureTrack(spec: TrackSpec): TrackView {
     let t = tracks.get(spec.id);
     if (t) return t;
@@ -207,6 +231,7 @@ export async function mountWorld(root: HTMLElement) {
     t.applyBiome(biomes.addTrack(t).propSpot);
     for (let x = -30; x < t.endX; x += 36) if (biomes.groundAt(t.origin.x + x, t.origin.z - 8.4) > -0.3) env.addPole(t.origin.x + x, t.origin.z - 8.4);
     refit();
+    warmShaders();
     t.setCounters(countersFrom());
     // keep the overview on every plot until a human takes the camera
     if (ready && !touched && !tour.on) frameAll();
@@ -292,6 +317,7 @@ export async function mountWorld(root: HTMLElement) {
     };
     a = { id, track, slot: sl, joinedAt: performance.now(), lanes: { bare: mk('bare'), airbag: mk('airbag') }, skids: [], sims: [] };
     actors.set(id, a);
+    warmNow(track.group); // before its first frame: the new cars (and maybe a new lane pair) bring fresh materials
     return a;
   }
 
@@ -792,6 +818,7 @@ export async function mountWorld(root: HTMLElement) {
     onGesture: () => audio.unlock(),
   });
   audio.attach(nav.camera);
+  audio.prepare(); // open the audio device now, not on the first drag (it blocks ~0.4 s)
 
   // debug / screenshot hooks
   const api = {
@@ -841,6 +868,7 @@ export async function mountWorld(root: HTMLElement) {
   nav.yaw = nav.goal.yaw;
   nav.pitch = nav.goal.pitch;
   nav.dist = nav.goal.dist * 1.35;
+  warmShaders();
   if (params.get('tour') === '1') tour.start();
 
   // ── loop ──────────────────────────────────────────────────────────────────

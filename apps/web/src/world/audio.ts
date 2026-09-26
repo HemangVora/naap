@@ -88,20 +88,28 @@ export class WorldAudio {
     if (this.listener) camera.add(this.listener);
   }
 
-  /** First user gesture: create / resume the AudioContext and build the graph. */
-  unlock() {
-    if (this.ctx) {
-      if (this.ctx.state === 'suspended') void this.ctx.resume();
-      return;
-    }
+  /** Open the audio device at load: creating the AudioContext blocks the main thread for ~0.4 s, which used to land on
+   *  the first drag. It stays suspended (and `ctx` unset, so nothing plays) until unlock(). */
+  prepare() {
+    if (this.listener) return;
     try {
       this.listener = new THREE.AudioListener();
     } catch (err) {
       console.warn('[audio] WebAudio unavailable', err);
       return;
     }
-    const ctx = (this.ctx = this.listener.context);
     this.camera.add(this.listener);
+  }
+
+  /** First user gesture: resume the AudioContext and build the graph. */
+  unlock() {
+    if (this.ctx) {
+      if (this.ctx.state === 'suspended') void this.ctx.resume();
+      return;
+    }
+    this.prepare();
+    if (!this.listener) return;
+    const ctx = (this.ctx = this.listener.context);
     void ctx.resume();
     this.listener.setMasterVolume(this.muted ? 0 : 1);
     this.sfx = ctx.createGain();

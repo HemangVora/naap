@@ -12,6 +12,10 @@ const COL = {
   lantern: new THREE.Color('#ffb877'),
 };
 
+/** Transparent 1×1 stand-in so the plaque always has a map: adding one later changes the shader and links it mid-frame. */
+const BLANK_MAP = new THREE.DataTexture(new Uint8Array(4), 1, 1);
+BLANK_MAP.needsUpdate = true;
+
 const G = {
   post: new THREE.BoxGeometry(0.28, 3.4, 0.28),
   tollPost: new THREE.BoxGeometry(0.3, 1.4, 0.3),
@@ -87,7 +91,7 @@ export class Gate {
     this.armPivot.rotation.x = this.armTarget;
     this.group.add(this.armPivot);
 
-    this.plaque = new THREE.Mesh(G.plaque, new THREE.MeshBasicMaterial({ transparent: true, side: THREE.DoubleSide }));
+    this.plaque = new THREE.Mesh(G.plaque, new THREE.MeshBasicMaterial({ map: BLANK_MAP, transparent: true, side: THREE.DoubleSide }));
     this.plaque.position.set(-0.05, sek ? 1.95 : 1.9, 0.1);
     this.plaque.rotation.set(this.plaqueTarget, 0, 0);
     this.plaque.visible = false;
@@ -136,8 +140,8 @@ export class Gate {
   private showPlaque(reason: string, chips: string[], tone: 'wood' | 'green' | 'amber') {
     this.plaqueTex?.dispose();
     this.plaqueTex = plaqueTexture(reason, chips, tone);
+    // same shader either way (the map slot is always filled), so no needsUpdate / program lookup
     this.plaque.material.map = this.plaqueTex;
-    this.plaque.material.needsUpdate = true;
     this.plaque.visible = true;
     this.plaque.rotation.x = Math.PI / 2 + 0.6;
     this.plaqueTarget = 0;
