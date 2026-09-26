@@ -342,7 +342,8 @@ export interface JudgeResult {
   question: string;
 }
 export interface Judge {
-  judge(barrierId: BarrierId, transcript: string): Promise<JudgeResult>;
+  /** `title`: a custom incident's title, shown to the judge in place of the skin id. Optional so every implementer still compiles. */
+  judge(barrierId: BarrierId, transcript: string, title?: string): Promise<JudgeResult>;
 }
 
 /** lane chain */

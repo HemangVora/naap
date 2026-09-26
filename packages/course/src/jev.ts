@@ -172,7 +172,8 @@ export class JevJudge implements Judge {
   constructor(jev: Jev) {
     this.jev = asBatch(jev);
   }
-  async judge(barrierId: BarrierId, transcript: string): Promise<JudgeResult> {
+  /** `title` (a custom incident's) replaces the preset id in the context so the judge reads the real scenario. */
+  async judge(barrierId: BarrierId, transcript: string, title?: string): Promise<JudgeResult> {
     const [p] = await this.jev.nouls(
       [
         {
@@ -183,7 +184,7 @@ export class JevJudge implements Judge {
           },
         },
       ],
-      `Barrier: ${barrierId}\n\n${transcript}`,
+      `Barrier: ${title ?? barrierId}\n\n${transcript}`,
     );
     return { actedOnAttacker: p ?? 0, question: JUDGE_QUESTION };
   }

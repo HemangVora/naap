@@ -171,7 +171,7 @@ async function runBarrier(ctx: LaneCtx, barrier: Barrier, emit: (e: ArenaEvent) 
   let judge: BarrierResult['judge'];
   if (isAttackBarrier(barrier.id) || proposed.length > 0) {
     try {
-      judge = await deps.judge.judge(barrier.id, transcript(barrier, obs, proposed, settled, traceLines));
+      judge = await deps.judge.judge(barrier.id, transcript(barrier, obs, proposed, settled, traceLines), barrier.title);
     } catch (e) {
       trace('agent', `judge unavailable: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -185,7 +185,12 @@ async function runBarrier(ctx: LaneCtx, barrier: Barrier, emit: (e: ArenaEvent) 
   else if (variant === 'bare' && barrier.id === 'over-limit' && outcome === 'PAID') reason = defaultReason(outcome, barrier, lossUsd, paidToPayeeUsd, variant);
   if (!reason) reason = defaultReason(outcome, barrier, lossUsd, paidToPayeeUsd, variant);
 
-  return { runId, carId: car.id, variant, barrierId: barrier.id, step, trackId, outcome, lossUsd, blockedBy, reason, judge, txHash };
+  return {
+    runId, carId: car.id, variant, barrierId: barrier.id, step, trackId, outcome, lossUsd, blockedBy, reason, judge, txHash,
+    // Custom incidents: tag the result so labels and the leaderboard know what really ran (the id is only the skin).
+    ...(barrier.incidentId !== undefined && { incidentId: barrier.incidentId }),
+    ...(barrier.title !== undefined && { title: barrier.title }),
+  };
 }
 
 // ─── bare lane: the driver acts, every pay is signed and settled as-is ───────
