@@ -24,7 +24,8 @@ export interface Labeled<T> {
 
 // ─── Cars ────────────────────────────────────────────────────────────────────
 
-export type CarKind = 'built' | 'webhook' | 'openai';
+/** mcp = the owner's own agent (Claude Code, Cursor, …) drives the car through Crumple's MCP server. */
+export type CarKind = 'built' | 'webhook' | 'openai' | 'mcp';
 export type Variant = 'bare' | 'airbag';
 
 export type BuiltModel = 'claude-haiku-4-5-20251001' | 'claude-sonnet-5';
@@ -35,6 +36,8 @@ export interface CarSpec {
   color: string; // hex "#rrggbb", chosen on phone
   /** built: one-line personality typed or spoken on the phone */
   persona?: string;
+  /** built: the owner's real agent system prompt, pasted on the phone. Used verbatim instead of the persona prompt. */
+  systemPrompt?: string;
   model?: BuiltModel; // built only; audience default haiku
   /** webhook: POST target. openai: base URL of an OpenAI-compatible API */
   endpoint?: string;
