@@ -1,5 +1,6 @@
 import type { CarPublic, CarSpec, TrackSpec } from '../types';
-import { DEFAULT_TRACK_ID, STANDARD_TRACK, BARRIER_SHORT } from '../types';
+import { DEFAULT_TRACK_ID, STANDARD_TRACK } from '../types';
+import { obstacleTitle } from '../incidents';
 import { el, qs } from '../dom';
 import { isMock } from '../feed';
 import { brandHeader } from '../brand';
@@ -56,12 +57,12 @@ export function mountJoin(root: HTMLElement) {
       trackSel.append(o);
     }
     const cur = list.find((t) => t.id === trackId);
-    trackHint.textContent = cur ? cur.obstacles.map((o) => BARRIER_SHORT[o.type]).join(' → ') : '';
+    trackHint.textContent = cur ? cur.obstacles.map((o) => obstacleTitle(o)).join(' → ') : '';
     trackSel.onchange = () => {
       trackSel.dataset.touched = '1';
       trackId = trackSel.value;
       const t = list.find((x) => x.id === trackId);
-      trackHint.textContent = t ? t.obstacles.map((o) => BARRIER_SHORT[o.type]).join(' → ') : '';
+      trackHint.textContent = t ? t.obstacles.map((o) => obstacleTitle(o)).join(' → ') : '';
     };
   };
   setTracks([STANDARD_TRACK as TrackSpec]);

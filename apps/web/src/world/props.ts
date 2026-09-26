@@ -83,7 +83,7 @@ export function buildProp(ob: TrackObstacle): THREE.Group {
     const roof = new THREE.Mesh(G.boothRoof, type === 'legit' ? M.yellow : M.vermilion);
     roof.position.y = 3.0;
     roof.castShadow = true;
-    const amt = ob.amountUsd ?? (type === 'legit' ? 1 : 40);
+    const amt = ob.amountUsd ?? ob.custom?.amountUsd ?? (type === 'legit' ? 1 : 40);
     const price = `$${amt % 1 ? amt.toFixed(2) : amt}`;
     const k = `${type}:${price}`;
     let mat = kioskMats.get(k);

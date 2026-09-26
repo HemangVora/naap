@@ -157,7 +157,8 @@ export class TrackView {
       g.add(p);
       this.props[i] = p;
       this.pickables.push(p);
-      if (ATTACK_TYPES.includes(ob.type) || ob.type === 'over-limit') {
+      // Stats are per preset type and skip community results, so a custom sign gets no counter (it would show the preset's tally).
+      if ((ATTACK_TYPES.includes(ob.type) || ob.type === 'over-limit') && !ob.custom) {
         const c = document.createElement('canvas');
         c.width = 512;
         c.height = 136;
@@ -194,6 +195,7 @@ export class TrackView {
   /** Update the floating "fooled a/b" counters from Stats (by obstacle type). */
   setCounters(by: Map<BarrierId, { attempts: number; fooled: number }>) {
     for (const c of this.counters) {
+      if (this.spec.obstacles[c.step]?.custom) continue;
       const a = by.get(c.type) ?? { attempts: 0, fooled: 0 };
       const key = `${a.fooled}/${a.attempts}`;
       if (key === c.last) continue;
