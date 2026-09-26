@@ -4,10 +4,10 @@ import { short as sekishoShort } from '@crumple/sekisho';
 // measured on the fork, not from what the agent claimed.
 import type {
   Address, AgentAction, ArenaEvent, BarrierResult, Car, CarDriver, CarSpec, Eip3009Auth, Hex, Mandate, Observation,
-  PaymentIntent, Rating, RunDeps, SessionState, StepUpResult, TraceLine, Variant, Verdict,
+  PaymentIntent, Rating, RunDeps, SessionState, StepUpResult, TraceLine, TrackSpec, Variant, Verdict,
 } from '@crumple/core';
-import { BARRIER_ORDER, CAR_START_BALANCE_USD, STEPUP_TTL_AUDIENCE_SEC, STEPUP_TTL_OWNER_SEC, WEATHER_PAYEE_ENS } from '@crumple/core';
-import { buildBarrier, observationFor, type Barrier, type CourseAddrs } from './barriers.js';
+import { CAR_START_BALANCE_USD, DEFAULT_TRACK, STEPUP_TTL_AUDIENCE_SEC, STEPUP_TTL_OWNER_SEC, WEATHER_PAYEE_ENS } from '@crumple/core';
+import { buildTrack, observationFor, type Barrier, type CourseAddrs } from './barriers.js';
 import { buildRating, isAttackBarrier, round2, scoreBarrier, summariseRun } from './score.js';
 import { isAddress, isEnsName } from './drivers/sanitize.js';
 
@@ -37,6 +37,8 @@ interface LaneCtx {
   mandate: Mandate;
   weather: Address;
   driver: CarDriver;
+  trackId: string;
+  totalSteps: number;
 }
 
 
@@ -61,11 +63,15 @@ function emitter(deps: RunDeps): (e: ArenaEvent) => void {
   };
 }
 
-export async function runCar(car: Car, spec: CarSpec, deps: RunDeps, addrs: CourseAddrs): Promise<Rating> {
+/**
+ * Drives `track.obstacles` in order (1–8, repeats allowed) on both lanes in parallel. Every event and result
+ * carries `step` (0-based obstacle index) and `trackId`.
+ */
+export async function runCar(car: Car, spec: CarSpec, deps: RunDeps, addrs: CourseAddrs, track: TrackSpec = DEFAULT_TRACK): Promise<Rating> {
   const emit = emitter(deps);
   const mandate = await loadMandate(car, deps);
   const weather = (await deps.mandates.resolve(WEATHER_PAYEE_ENS)) ?? addrs.weather;
-  const barriers = BARRIER_ORDER.map((id) => buildBarrier(id, addrs));
+  const barriers = buildTrack(track, addrs);
   const stamp = Date.now().toString(36);
 
   const lane = (variant: Variant) =>
@@ -76,6 +82,8 @@ export async function runCar(car: Car, spec: CarSpec, deps: RunDeps, addrs: Cour
         wallet: deps.signer.walletFor(car.id, variant),
         mandate, weather,
         driver: deps.driverFor(car, spec),
+        trackId: track.id,
+        totalSteps: barriers.length,
       },
       barriers,
       emit,
@@ -115,8 +123,9 @@ async function runLane(ctx: LaneCtx, barriers: Barrier[], emit: (e: ArenaEvent) 
 }
 
 async function runBarrier(ctx: LaneCtx, barrier: Barrier, emit: (e: ArenaEvent) => void): Promise<BarrierResult> {
-  const { car, deps, variant, runId, wallet, weather } = ctx;
-  const obs = observationFor(barrier, runId);
+  const { car, deps, variant, runId, wallet, weather, trackId } = ctx;
+  const step = barrier.step ?? 0;
+  const obs = observationFor(barrier, runId, ctx.totalSteps);
   const settled: Settled[] = [];
   /** Every payment the agent proposed (for the judge transcript). */
   const proposed: PaymentIntent[] = [];
@@ -131,11 +140,11 @@ async function runBarrier(ctx: LaneCtx, barrier: Barrier, emit: (e: ArenaEvent) 
   const trace = (who: TraceLine['who'], text: string) => {
     const line: TraceLine = { at: Date.now(), who, text };
     traceLines.push(line);
-    emit({ t: 'trace', carId: car.id, runId, barrierId: barrier.id, line });
+    emit({ t: 'trace', carId: car.id, runId, barrierId: barrier.id, step, line });
   };
 
   await deps.chain.fundCar(wallet, CAR_START_BALANCE_USD);
-  emit({ t: 'barrier.enter', carId: car.id, runId, variant, barrierId: barrier.id });
+  emit({ t: 'barrier.enter', carId: car.id, runId, variant, barrierId: barrier.id, step, trackId });
 
   try {
     if (variant === 'bare') {
@@ -176,7 +185,7 @@ async function runBarrier(ctx: LaneCtx, barrier: Barrier, emit: (e: ArenaEvent) 
   else if (variant === 'bare' && barrier.id === 'over-limit' && outcome === 'PAID') reason = defaultReason(outcome, barrier, lossUsd, paidToWeatherUsd, variant);
   if (!reason) reason = defaultReason(outcome, barrier, lossUsd, paidToWeatherUsd, variant);
 
-  return { runId, carId: car.id, variant, barrierId: barrier.id, outcome, lossUsd, blockedBy, reason, judge, txHash };
+  return { runId, carId: car.id, variant, barrierId: barrier.id, step, trackId, outcome, lossUsd, blockedBy, reason, judge, txHash };
 }
 
 // ─── bare lane: the driver acts, every pay is signed and settled as-is ───────
@@ -205,7 +214,7 @@ async function runBare(
       continue;
     }
     const intent: PaymentIntent = {
-      id: `${obs.runId}-${obs.barrierId}-${n++}`,
+      id: `${obs.runId}-${obs.step ?? 0}-${obs.barrierId}-${n++}`,
       runId: obs.runId, carId: car.id, barrierId: obs.barrierId, mode: 'bare',
       payTo: { value: payTo, label: 'OPAQUE', source: 'agent.pay.payTo' },
       payeeEns: isEnsName(a.args.payTo) ? { value: a.args.payTo, label: 'OPAQUE', source: 'agent.pay.payTo' } : undefined,
@@ -239,6 +248,7 @@ async function runAirbag(
   trace: (who: TraceLine['who'], text: string) => void, emit: (e: ArenaEvent) => void,
 ): Promise<{ txHash?: Hex; reason: string; blockedBy: BarrierResult['blockedBy'] }> {
   const { deps, car, spec, mandate, runId } = ctx;
+  const step = barrier.step ?? 0;
 
   const session: SessionState = {
     runId, barrierId: barrier.id,
@@ -272,7 +282,7 @@ async function runAirbag(
     outcome = await deps.sekisho.runBoundary(car, obs, actions, mandate, session);
   }
   for (const line of outcome.trace) {
-    emit({ t: 'trace', carId: car.id, runId, barrierId: barrier.id, line });
+    emit({ t: 'trace', carId: car.id, runId, barrierId: barrier.id, step, line });
   }
 
   let txHash: Hex | undefined;
@@ -284,7 +294,7 @@ async function runAirbag(
     const verdict = outcome.verdicts[i];
     if (!verdict) continue;
     proposed.push(intent);
-    for (const check of verdict.checks) emit({ t: 'check', carId: car.id, runId, barrierId: barrier.id, check });
+    for (const check of verdict.checks) emit({ t: 'check', carId: car.id, runId, barrierId: barrier.id, step, check });
     trace('policy', `${verdict.decision}${verdict.blockedBy.length ? ` [${verdict.blockedBy.join(', ')}]` : ''}: ${verdict.reason}`);
 
     if (verdict.decision === 'REFUSE') {
@@ -298,12 +308,13 @@ async function runAirbag(
       const isOwner = Boolean(spec.isOwnerCar);
       const summary = `Pay $${intent.amountUsd.value.toFixed(2)} to ${intent.payeeEns?.value ?? short(intent.payTo.value)}${intent.memo.value ? ` for ${intent.memo.value}` : ''}`;
       const handle = await deps.stepUp.request({
-        carId: car.id, intentId: intent.id, summary,
+        // Sekisho's intent ids are per barrier type; a track may repeat a type, so the step keeps them unique.
+        carId: car.id, intentId: `${intent.id}-s${step}`, summary,
         ttlSec: isOwner ? STEPUP_TTL_OWNER_SEC : STEPUP_TTL_AUDIENCE_SEC,
         allowApproval: isOwner,
       });
       emit({
-        t: 'stepup.pending', carId: car.id, runId, barrierId: barrier.id, summary,
+        t: 'stepup.pending', carId: car.id, runId, barrierId: barrier.id, step, summary,
         verificationUri: handle.verificationUri, userCode: handle.userCode, expiresAt: handle.expiresAt, canApprove: isOwner,
       });
       trace('stepup', `${summary} — waiting for ${isOwner ? 'owner (World ID)' : 'nobody: audience car, expires'}`);

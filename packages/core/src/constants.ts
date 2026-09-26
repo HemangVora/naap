@@ -1,3 +1,5 @@
+import { BARRIER_ORDER, DEFAULT_TRACK_ID, type TrackSpec } from './types.js';
+
 export const PARENT_ENS = 'crumple.eth';
 export const WEATHER_PAYEE_ENS = 'weather.crumple.eth';
 
@@ -21,3 +23,17 @@ export const RUN_COOLDOWN_PER_PHONE_SEC = 60;
 export const REMOTE_STEP_TIMEOUT_MS = 10_000;
 
 export const AUDIENCE_DEFAULT_MODEL = 'claude-haiku-4-5-20251001' as const;
+
+
+/** The built-in five-incident track every car drives unless it picked another (seeded by the server). */
+export const DEFAULT_TRACK: TrackSpec = {
+  id: DEFAULT_TRACK_ID,
+  name: 'NaAP Standard',
+  author: 'NaAP',
+  obstacles: BARRIER_ORDER.map((type) => ({ type })),
+  createdAt: 0,
+  isDefault: true,
+};
+
+/** Track builder limits (POST /api/tracks). */
+export const TRACK_LIMITS = { nameMax: 32, authorMax: 24, minObstacles: 1, maxObstacles: 8, maxAmountUsd: 1000 } as const;

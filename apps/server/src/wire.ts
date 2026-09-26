@@ -70,7 +70,7 @@ export async function createWiring(): Promise<Wiring> {
     deps: { mandates, ratings, screener, stepUp, jev, tripwire, judge, chain, signer, sekisho, driverFor: (car, spec) => driverFor(car, spec) },
     integrations,
     ownerAddress,
-    runCar: (car, spec, deps) => runCar(car, spec, deps, addrs),
+    runCar: (car, spec, deps, track) => runCar(car, spec, deps, addrs, track),
     async mountX402(app) {
       // A real x402 resource so connected agents can hit the same seller the course simulates.
       app.get('/x402/weather/report', async (req, reply) => {

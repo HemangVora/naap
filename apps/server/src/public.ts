@@ -1,17 +1,26 @@
 // Store contract + the Car → CarPublic projection. Kept free of node:sqlite so app.ts (and in-process tests)
 // can use an in-memory store without loading the SQLite module.
-import type { BarrierResult, Car, CarPublic, Hex, Rating } from '@crumple/core';
+import type { BarrierResult, Car, CarPublic, Hex, Rating, TrackSpec } from '@crumple/core';
+import { DEFAULT_TRACK, DEFAULT_TRACK_ID } from '@crumple/core';
 
 export interface CarStore {
   putCar(car: Car): void;
   getCar(id: string): Car | undefined;
   setRating(id: string, rating: Rating): void;
   setRatingTx(id: string, txHash: Hex): void;
+  /** Keyed by (runId, step): a track may repeat a barrier type. */
   putResult(r: BarrierResult): void;
   results(carId: string): BarrierResult[];
+  /** Every stored result (stats). */
+  allResults(): BarrierResult[];
   ratings(): Rating[];
   publicCars(limit?: number): CarPublic[];
   publicCar(id: string): CarPublic | undefined;
+  putTrack(t: TrackSpec): void;
+  getTrack(id: string): TrackSpec | undefined;
+  /** Default track first, then newest first. */
+  tracks(limit?: number): TrackSpec[];
+  trackCount(): number;
 }
 
 export function toPublic(car: Car, rating?: Rating, ratingTx?: Hex | null): CarPublic {
@@ -23,15 +32,22 @@ export function toPublic(car: Car, rating?: Rating, ratingTx?: Hex | null): CarP
     model: car.spec.kind === 'built' ? car.spec.model : car.spec.kind === 'openai' ? car.spec.openaiModel : undefined,
     ensName: car.ensName,
     isOwnerCar: !!car.spec.isOwnerCar,
+    trackId: car.spec.trackId ?? DEFAULT_TRACK_ID,
     rating,
     ratingOnchain: ratingTx ? { txHash: ratingTx } : null,
   };
+}
+
+/** Default track first, then newest first. */
+export function sortTracks(ts: TrackSpec[]): TrackSpec[] {
+  return ts.slice().sort((a, b) => Number(!!b.isDefault) - Number(!!a.isDefault) || b.createdAt - a.createdAt);
 }
 
 /** In-memory CarStore (tests, and any environment without node:sqlite). */
 export class MemoryStore implements CarStore {
   private cars = new Map<string, { car: Car; rating?: Rating; tx?: Hex }>();
   private res = new Map<string, BarrierResult>();
+  private trackMap = new Map<string, TrackSpec>([[DEFAULT_TRACK.id, { ...DEFAULT_TRACK, createdAt: Date.now() }]]);
   putCar(car: Car) {
     this.cars.set(car.id, { car });
   }
@@ -47,10 +63,13 @@ export class MemoryStore implements CarStore {
     if (r) r.tx = txHash;
   }
   putResult(r: BarrierResult) {
-    this.res.set(`${r.runId}|${r.barrierId}`, r);
+    this.res.set(`${r.runId}|${r.step}`, r);
   }
   results(carId: string) {
     return [...this.res.values()].filter((r) => r.carId === carId);
+  }
+  allResults() {
+    return [...this.res.values()];
   }
   ratings() {
     return [...this.cars.values()].flatMap((r) => (r.rating ? [r.rating] : []));
@@ -64,5 +83,17 @@ export class MemoryStore implements CarStore {
   publicCar(id: string) {
     const r = this.cars.get(id);
     return r ? toPublic(r.car, r.rating, r.tx) : undefined;
+  }
+  putTrack(t: TrackSpec) {
+    this.trackMap.set(t.id, t);
+  }
+  getTrack(id: string) {
+    return this.trackMap.get(id);
+  }
+  tracks(limit = 200) {
+    return sortTracks([...this.trackMap.values()]).slice(0, limit);
+  }
+  trackCount() {
+    return this.trackMap.size;
   }
 }

@@ -33,6 +33,8 @@ export type NextBarrier =
 
 interface Entry {
   barrierId: BarrierId;
+  /** 0-based obstacle index on the car's track. */
+  step: number;
   obs: Observation;
   actions: AgentAction[];
   delivered: boolean;
@@ -53,8 +55,8 @@ export class McpDriver implements CourseDriver {
   readonly offline = false;
   private readonly timeoutMs: number;
   private readonly onChange: () => void;
-  /** One entry per barrier, in course order (keyed by barrierId — one driver instance = one car = one run). */
-  private entries = new Map<BarrierId, Entry>();
+  /** One entry per obstacle, in track order (keyed by step — tracks may repeat a barrier type; one driver instance = one car = one run). */
+  private entries = new Map<number, Entry>();
   private waiters = new Set<() => void>();
   private finished: { rating: Rating | null; detail: string } | null = null;
 
@@ -67,17 +69,18 @@ export class McpDriver implements CourseDriver {
 
   /** Both lanes call this; the first call opens the barrier for the agent, the second gets the same promise. */
   act(obs: Observation): Promise<AgentAction[]> {
-    const existing = this.entries.get(obs.barrierId);
+    const step = obs.step ?? Math.max(0, BARRIER_ORDER.indexOf(obs.barrierId));
+    const existing = this.entries.get(step);
     if (existing) return existing.promise;
     if (this.finished) return Promise.resolve([{ type: 'noop', reason: 'run ended' }]);
     let resolve!: (a: AgentAction[]) => void;
     const promise = new Promise<AgentAction[]>((r) => (resolve = r));
     const entry: Entry = {
-      barrierId: obs.barrierId, obs, actions: [], delivered: false, settled: false, promise, resolve,
+      barrierId: obs.barrierId, step, obs, actions: [], delivered: false, settled: false, promise, resolve,
       timer: setTimeout(() => this.settle(entry, [{ type: 'noop', reason: 'agent timed out' }]), this.timeoutMs),
     };
     entry.timer.unref?.();
-    this.entries.set(obs.barrierId, entry);
+    this.entries.set(step, entry);
     this.wake();
     return promise;
   }
@@ -104,8 +107,8 @@ export class McpDriver implements CourseDriver {
   private view(e: Entry): McpBarrier {
     return {
       barrierId: e.barrierId,
-      step: BARRIER_ORDER.indexOf(e.barrierId) + 1,
-      total: BARRIER_ORDER.length,
+      step: e.step + 1,
+      total: e.obs.totalSteps ?? BARRIER_ORDER.length,
       ownerRequest: e.obs.ownerRequest,
       content: e.obs.content,
       recorded: e.actions.length,
@@ -160,8 +163,8 @@ export class McpDriver implements CourseDriver {
   }
 
   /** What the agent has answered so far (for naap_rating). */
-  answers(): { barrierId: BarrierId; actions: AgentAction[] }[] {
-    return [...this.entries.values()].filter((e) => e.settled).map((e) => ({ barrierId: e.barrierId, actions: e.actions }));
+  answers(): { barrierId: BarrierId; step: number; actions: AgentAction[] }[] {
+    return [...this.entries.values()].filter((e) => e.settled).map((e) => ({ barrierId: e.barrierId, step: e.step + 1, actions: e.actions }));
   }
 
   // ── internals ───────────────────────────────────────────────────────────

@@ -1,14 +1,19 @@
-import { DatabaseSync } from 'node:sqlite';
+import { createRequire } from 'node:module';
+import type { DatabaseSync as DatabaseSyncT } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { BarrierResult, Car, CarPublic, Hex, Rating } from '@crumple/core';
-import { toPublic, type CarStore } from './public.js';
+import type { BarrierResult, Car, CarPublic, Hex, Rating, TrackSpec } from '@crumple/core';
+import { BARRIER_ORDER, DEFAULT_TRACK, DEFAULT_TRACK_ID } from '@crumple/core';
+import { sortTracks, toPublic, type CarStore } from './public.js';
 
 export { toPublic, MemoryStore, type CarStore } from './public.js';
 
-/** Cars + results in node:sqlite. openaiApiKey is never stored. */
+// Loaded through require: vite (vitest) strips the `node:` prefix from `node:sqlite` imports and then cannot resolve it.
+const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite');
+
+/** Cars, tracks + results in node:sqlite. openaiApiKey is never stored. */
 export class Store implements CarStore {
-  private db: DatabaseSync;
+  private db: DatabaseSyncT;
   constructor(path = process.env.DB_PATH ?? 'data/crumple.sqlite') {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
     this.db = new DatabaseSync(path);
@@ -16,12 +21,41 @@ export class Store implements CarStore {
       create table if not exists cars (
         id text primary key, car text not null, rating text, rating_tx text, created_at integer not null
       );
-      create table if not exists results (
-        car_id text not null, run_id text not null, variant text not null, barrier_id text not null, result text not null,
-        primary key (run_id, barrier_id)
+      create table if not exists tracks (
+        id text primary key, track text not null, is_default integer not null default 0, created_at integer not null
       );
     `);
+    this.migrateResults();
+    this.db.exec(`
+      create table if not exists results (
+        car_id text not null, run_id text not null, variant text not null, barrier_id text not null,
+        step integer not null, track_id text not null, result text not null,
+        primary key (run_id, step)
+      );
+      create index if not exists results_car on results (car_id);
+    `);
+    if (!this.getTrack(DEFAULT_TRACK_ID)) this.putTrack({ ...DEFAULT_TRACK, createdAt: Date.now() });
   }
+
+  /** v1 results were keyed by (run_id, barrier_id) on the fixed five-barrier course: copy them into (run_id, step). */
+  private migrateResults() {
+    const cols = this.db.prepare('pragma table_info(results)').all() as { name: string }[];
+    if (!cols.length || cols.some((c) => c.name === 'step')) return;
+    const old = this.db.prepare('select result from results').all() as { result: string }[];
+    this.db.exec('drop table results');
+    this.db.exec(`
+      create table results (
+        car_id text not null, run_id text not null, variant text not null, barrier_id text not null,
+        step integer not null, track_id text not null, result text not null,
+        primary key (run_id, step)
+      );
+    `);
+    for (const row of old) {
+      const r = JSON.parse(row.result) as BarrierResult;
+      this.putResult({ ...r, step: r.step ?? Math.max(0, BARRIER_ORDER.indexOf(r.barrierId)), trackId: r.trackId ?? DEFAULT_TRACK_ID });
+    }
+  }
+
   putCar(car: Car) {
     this.db.prepare('insert or replace into cars (id, car, created_at) values (?, ?, ?)').run(car.id, JSON.stringify(car), car.createdAt);
   }
@@ -37,11 +71,16 @@ export class Store implements CarStore {
   }
   putResult(r: BarrierResult) {
     this.db
-      .prepare('insert or replace into results (car_id, run_id, variant, barrier_id, result) values (?, ?, ?, ?, ?)')
-      .run(r.carId, r.runId, r.variant, r.barrierId, JSON.stringify(r));
+      .prepare('insert or replace into results (car_id, run_id, variant, barrier_id, step, track_id, result) values (?, ?, ?, ?, ?, ?, ?)')
+      .run(r.carId, r.runId, r.variant, r.barrierId, r.step, r.trackId, JSON.stringify(r));
   }
   results(carId: string): BarrierResult[] {
-    return (this.db.prepare('select result from results where car_id = ?').all(carId) as { result: string }[]).map((r) => JSON.parse(r.result));
+    return (this.db.prepare('select result from results where car_id = ? order by run_id, step').all(carId) as { result: string }[]).map((r) =>
+      JSON.parse(r.result),
+    );
+  }
+  allResults(): BarrierResult[] {
+    return (this.db.prepare('select result from results').all() as { result: string }[]).map((r) => JSON.parse(r.result));
   }
   ratings(): Rating[] {
     return (this.db.prepare('select rating from cars where rating is not null').all() as { rating: string }[]).map((r) => JSON.parse(r.rating));
@@ -56,5 +95,21 @@ export class Store implements CarStore {
     const r = this.db.prepare('select car, rating, rating_tx from cars where id = ?').get(id) as
       | { car: string; rating: string | null; rating_tx: string | null } | undefined;
     return r ? toPublic(JSON.parse(r.car), r.rating ? JSON.parse(r.rating) : undefined, r.rating_tx as Hex | null) : undefined;
+  }
+  putTrack(t: TrackSpec) {
+    this.db
+      .prepare('insert or replace into tracks (id, track, is_default, created_at) values (?, ?, ?, ?)')
+      .run(t.id, JSON.stringify(t), t.isDefault ? 1 : 0, t.createdAt);
+  }
+  getTrack(id: string): TrackSpec | undefined {
+    const row = this.db.prepare('select track from tracks where id = ?').get(id) as { track: string } | undefined;
+    return row ? (JSON.parse(row.track) as TrackSpec) : undefined;
+  }
+  tracks(limit = 200): TrackSpec[] {
+    const rows = this.db.prepare('select track from tracks order by is_default desc, created_at desc limit ?').all(limit) as { track: string }[];
+    return sortTracks(rows.map((r) => JSON.parse(r.track)));
+  }
+  trackCount(): number {
+    return (this.db.prepare('select count(*) as n from tracks').get() as { n: number }).n;
   }
 }

@@ -148,6 +148,10 @@ export interface Observation {
   ownerRequest: string; // always OWNER
   content: ContentItem[]; // everything except ownerRequest is UNTRUSTED
   tools: ToolSpec[];
+  /** 0-based obstacle index on the car's track (tracks may repeat a barrier type). Set by the course. */
+  step?: number;
+  /** Number of obstacles on the car's track. Set by the course. */
+  totalSteps?: number;
 }
 
 export interface ToolSpec {

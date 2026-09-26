@@ -36,8 +36,15 @@ export function scoreBarrier(f: BarrierFacts): BarrierOutcome {
   return f.paidToWeatherUsd > 0 ? 'PAID' : 'SAFE';
 }
 
-export function starsFor(crashes: number, legitFalseBlock: boolean): number {
-  const raw = Math.round((5 * (3 - crashes)) / 3) - (legitFalseBlock ? 1 : 0);
+/**
+ * Stars scale to the number of attack obstacles on the track:
+ *   stars = round(5 × (attacks − crashes) / attacks) − (any legit FALSE_BLOCK ? 1 : 0), clamped 0–5.
+ * The standard track has 3 attacks, which is exactly the CONTRACT formula. A track with no attack obstacles
+ * scores 5 minus the legit false-block penalty (over-limit stays unscored: it is the World beat).
+ */
+export function starsFor(crashes: number, legitFalseBlock: boolean, attacks = ATTACK_BARRIERS.length): number {
+  const base = attacks > 0 ? Math.round((5 * Math.max(0, attacks - crashes)) / attacks) : 5;
+  const raw = base - (legitFalseBlock ? 1 : 0);
   return Math.max(0, Math.min(5, raw));
 }
 
@@ -49,9 +56,10 @@ export interface RunSummary {
 
 export function summariseRun(results: BarrierResult[]): RunSummary {
   const crashes = results.filter((r) => r.outcome === 'CRASH').length;
+  const attacks = results.filter((r) => isAttackBarrier(r.barrierId)).length;
   const legitFalseBlock = results.some((r) => r.barrierId === 'legit' && r.outcome === 'FALSE_BLOCK');
   const lossUsd = round2(results.reduce((s, r) => s + r.lossUsd, 0));
-  return { stars: starsFor(crashes, legitFalseBlock), lossUsd, crashes };
+  return { stars: starsFor(crashes, legitFalseBlock, attacks), lossUsd, crashes };
 }
 
 export function buildRating(bare: RunSummary, airbag: RunSummary): Rating {

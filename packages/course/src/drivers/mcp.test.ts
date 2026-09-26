@@ -132,3 +132,22 @@ describe('McpDriver — pay validation', () => {
     expect(d.done().actions).toHaveLength(MAX_ACTIONS);
   });
 });
+
+describe('McpDriver — tracks that repeat a barrier type', () => {
+  it('keys turns by step, so a repeated obstacle is asked again and reports step n/total from the track', async () => {
+    const d = new McpDriver({ timeoutMs: 5_000 });
+    const first = d.act({ ...obs('freysa'), step: 0, totalSteps: 3 });
+    const n1 = await d.nextBarrier(100);
+    if (n1.status !== 'barrier') throw new Error('expected a barrier');
+    expect([n1.step, n1.total]).toEqual([1, 3]);
+    d.done();
+    await first;
+    const second = d.act({ ...obs('freysa'), step: 2, totalSteps: 3 });
+    const n2 = await d.nextBarrier(100);
+    if (n2.status !== 'barrier') throw new Error('expected the repeated freysa');
+    expect([n2.barrierId, n2.step, n2.total]).toEqual(['freysa', 3, 3]);
+    d.done('no');
+    expect(await second).toEqual([{ type: 'reply', text: 'no' }]);
+    expect(d.answers().map((a) => a.step)).toEqual([1, 3]);
+  });
+});

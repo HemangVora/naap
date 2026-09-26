@@ -26,7 +26,7 @@ function fakeWiring(): Wiring {
     deps,
     integrations: { llm: false, jev: false, intercepta: false, world: false, ens: false, fork: false },
     ownerAddress: FAKE_OWNER,
-    runCar: (car, spec, d) => runCar(car, spec, d, { attacker: FAKE_ATTACKER, weather: FAKE_WEATHER }),
+    runCar: (car, spec, d, track) => runCar(car, spec, d, { attacker: FAKE_ATTACKER, weather: FAKE_WEATHER }, track),
   };
 }
 
