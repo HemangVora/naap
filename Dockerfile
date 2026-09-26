@@ -45,7 +45,6 @@ RUN pnpm --filter @crumple/web build || echo "web build skipped"
 
 # anvil's fork cache (per pinned block) — mount a Railway volume here to keep upstream RPC load ~0 across restarts
 ENV FOUNDRY_DIR=/root/.foundry
-VOLUME ["/root/.foundry/cache"]
 
 ENV PORT=8787
 EXPOSE 8787
