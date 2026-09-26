@@ -6,7 +6,7 @@ import { FAKE_ATTACKER } from '@crumple/core';
 import type { Address } from '@crumple/core';
 import { budget, createScreener, quickScanPath, scanTokenPath } from './screener.js';
 import { mapQuickScan, mapScanToken, reasonOf } from './mapping.js';
-import { ATTACKERS, BASE_USDC, WEATHER, weatherAddress } from './addresses.js';
+import { ATTACKERS, BASE_USDC, PAYEE, payeeAddress } from './addresses.js';
 import * as FX from './fixtures.js';
 
 const DRAINER = ATTACKERS[0];
@@ -177,7 +177,7 @@ describe('no key → FakeScreener semantics', () => {
     expect(s.hasKey).toBe(false);
     expect(await s.quickScan(FAKE_ATTACKER)).toMatchObject({ verdict: 'BLOCK', live: false, source: 'fake' });
     expect(await s.quickScan(ATTACKERS[1])).toMatchObject({ verdict: 'BLOCK', live: false });
-    expect(await s.quickScan(WEATHER)).toMatchObject({ verdict: 'PASS', live: false });
+    expect(await s.quickScan(PAYEE)).toMatchObject({ verdict: 'PASS', live: false });
     expect(await s.scanToken(BASE_USDC, 8453)).toMatchObject({ verdict: 'PASS', live: false });
     expect(f).not.toHaveBeenCalled();
     expect(s.budget()).toMatchObject({ used: 0, hasKey: false, live: false });
@@ -185,12 +185,12 @@ describe('no key → FakeScreener semantics', () => {
 });
 
 describe('addresses', () => {
-  it('weather is a deterministic fresh EOA from the seed; attackers are distinct real addresses', () => {
-    expect(weatherAddress('abc')).toBe(weatherAddress('abc'));
-    expect(weatherAddress('abc')).not.toBe(weatherAddress('abd'));
-    expect(weatherAddress('0x' + '11'.repeat(32))).toMatch(/^0x[0-9a-fA-F]{40}$/);
+  it('the payee is a deterministic fresh EOA from the seed; attackers are distinct real addresses', () => {
+    expect(payeeAddress('abc')).toBe(payeeAddress('abc'));
+    expect(payeeAddress('abc')).not.toBe(payeeAddress('abd'));
+    expect(payeeAddress('0x' + '11'.repeat(32))).toMatch(/^0x[0-9a-fA-F]{40}$/);
     expect(ATTACKERS[0]).not.toBe(ATTACKERS[1]);
     for (const a of ATTACKERS) expect(a).toMatch(/^0x[0-9a-f]{40}$/);
-    expect(WEATHER).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    expect(PAYEE).toMatch(/^0x[0-9a-fA-F]{40}$/);
   });
 });

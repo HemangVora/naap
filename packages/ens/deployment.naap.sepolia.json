@@ -1,6 +1,6 @@
 {
   "relayer": "0xf78456BcfA81189fd7558DdeaA6c8C68075700f7",
-  "updatedAt": "2026-09-26T16:14:38.482Z",
+  "updatedAt": "2026-09-26T17:12:38.066Z",
   "userRegistry": "0xCD5B61Cb0b9eC5cA4e6674FE17169311D68Ab665",
   "resolver": "0xA93A04D15A58e2AeB629018ADA64e4015CCC85Db",
   "registerTx": "0x6bc8fa48135d0e99f6ed5153d16cd74b718db97317cd2141430e3272fa803e94",
@@ -8,5 +8,9 @@
   "weather": {
     "address": "0x16fB4859e0AC2b9e5E36DC5bB4EE654615a03D9C",
     "tx": "0x32ac3d0d94b0b5d34fb0a1fd49ed29fee31f4161120d42f9adbd956a086692a4"
+  },
+  "payee": {
+    "address": "0x16fB4859e0AC2b9e5E36DC5bB4EE654615a03D9C",
+    "tx": "0xc65daec06887a335e533133bfc7fd4e5fa619aee4b9956674d290df20a0f4ce8"
   }
 }

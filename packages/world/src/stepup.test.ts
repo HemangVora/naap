@@ -83,7 +83,7 @@ function live(fetch: typeof globalThis.fetch, c: ReturnType<typeof clock>, logs:
   return createStepUp({ issuer: ISSUER, clientId: CLIENT_ID, clientSecret: CLIENT_SECRET, fetch, getKey, now: c.now, sleep: c.sleep, log: (l) => logs.push(l) });
 }
 
-const ownerReq = { carId: 'owner', intentId: 'i1', summary: 'Pay $40 to weather.naap.eth', ttlSec: 300, allowApproval: true };
+const ownerReq = { carId: 'owner', intentId: 'i1', summary: 'Pay $40 to compute.naap.eth', ttlSec: 300, allowApproval: true };
 
 describe('createStepUp (live, owner car)', () => {
   it('APPROVES on a valid ID token with fresh auth_time; polls respecting interval and slow_down', async () => {

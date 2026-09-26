@@ -16,9 +16,9 @@
     Every request we send counts, including timeouts and errors. Past the ceiling → cache, else fixture with `live:false`.
   - **Timeout** 5 s (AbortController). Timeout / HTTP error / bad shape → fixture, `live:false`, `error` set, not cached, retried next call.
   - **No `INTERCEPTA_API_KEY`** → core `FakeScreener` semantics (blocks `FAKE_ATTACKER` + the real `ATTACKERS`, passes the rest), `live:false`, `source:'fake'`.
-- `src/addresses.ts`: `ATTACKERS` (two), `ATTACKER_CANDIDATES` (four, with source URLs), `WEATHER` (viem EOA from `WEATHER_SEED`), `BASE_USDC`.
+- `src/addresses.ts`: `ATTACKERS` (two), `ATTACKER_CANDIDATES` (four, with source URLs), `PAYEE` (viem EOA from `PAYEE_SEED`, legacy `WEATHER_SEED`), `BASE_USDC`.
   `verified` is read from `data/intercepta-probe.json`; verified candidates are ordered first.
-- `pnpm --filter @crumple/intercepta probe`: live-scans all candidates + WEATHER + Base USDC, prints verdicts/reasons, writes the evidence file, reports budget. Exits 1 if fewer than two attackers are flagged.
+- `pnpm --filter @crumple/intercepta probe`: live-scans all candidates + PAYEE + Base USDC, prints verdicts/reasons, writes the evidence file, reports budget. Exits 1 if fewer than two attackers are flagged.
 - Tests (`pnpm vitest run packages/intercepta`, 13 tests, no network): mapping, cache (in-process, concurrent, cross-process), budget ceiling, timeout, 403, bad shape, fake fallback, address derivation.
 
 ## Verdict mapping (thresholds)
@@ -42,7 +42,7 @@ Sekisho treats `HOLD` like `BLOCK` for the `INTERCEPTA` control (a held payment 
 | attacker 2 | `0x00001f78189be22c3498cff1b8e02272c3220000` | Etherscan label Inferno Drainer (Scam Sniffer) — https://etherscan.io/address/0x00001f78189be22c3498cff1b8e02272c3220000 |
 | spare | `0x0000daf60a1becf1bd617c584dea964455890000` | Inferno Drainer Phishing Contract 2 (BlockSec) |
 | spare | `0x47666fab8bd0ac7003bce3f5c3585383f09486e2` | Bybit exploiter (Lazarus) |
-| weather | `weatherAddress()` | `privateKeyToAccount(keccak256(utf8(WEATHER_SEED)))`; if `WEATHER_SEED` is a 0x 32-byte hex it is the key itself |
+| payee | `payeeAddress()` | `privateKeyToAccount(keccak256(utf8(PAYEE_SEED)))` (falls back to `WEATHER_SEED`); if the seed is a 0x 32-byte hex it is the key itself |
 | token | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` | native USDC on Base |
 
 All `verified:false` until the key arrives and the probe runs. Intercepta's Discord has pinned test addresses — if any of ours scan PASS, swap those in.
@@ -50,7 +50,7 @@ All `verified:false` until the key arrives and the probe runs. Intercepta's Disc
 ## Run it live
 
 ```
-INTERCEPTA_API_KEY=…  WEATHER_SEED=…      # in .env
+INTERCEPTA_API_KEY=…  PAYEE_SEED=…        # in .env (WEATHER_SEED still works)
 pnpm --filter @crumple/intercepta probe   # ~6 requests; writes data/intercepta-probe.json
 ```
 Then `createScreener()` in the server with no args. `budget()` from anywhere shows used/ceiling/live. Delete `data/intercepta-cache.json` to force fresh calls (costs budget).

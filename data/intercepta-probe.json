@@ -53,11 +53,11 @@
     },
     {
       "address": "0x16fB4859e0AC2b9e5E36DC5bB4EE654615a03D9C",
-      "label": "weather.crumple.eth payee (fresh EOA from WEATHER_SEED)",
+      "label": "compute.naap.eth payee (fresh EOA from PAYEE_SEED)",
       "chain": "base",
-      "source": "derived: privateKeyToAccount(keccak256(utf8(WEATHER_SEED))) via viem; never funded before the event",
+      "source": "derived: privateKeyToAccount(keccak256(utf8(PAYEE_SEED))) via viem; never funded before the event",
       "verified": true,
-      "role": "weather",
+      "role": "payee",
       "evidence": {
         "verdict": "PASS",
         "toxicScore": 0,

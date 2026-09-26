@@ -28,7 +28,7 @@ describe('mandate records', () => {
   const m: Mandate = {
     ensName: 'zx9.naap.eth',
     owner: '0x0000000000000000000000000000000000000001',
-    payees: [{ ens: 'Weather.naap.eth', address: '0x1111111111111111111111111111111111111111' }],
+    payees: [{ ens: 'Compute.naap.eth', address: '0x1111111111111111111111111111111111111111' }],
     perTxCapUsd: 5,
     dailyCapBps: 1000,
     expiresAt: 1_800_000_000,
@@ -38,8 +38,8 @@ describe('mandate records', () => {
     const recs = encodeMandateRecords(m);
     expect(recs.map((r) => r.key)).toEqual(Object.values(MANDATE_KEYS));
     const obj = Object.fromEntries(recs.map((r) => [r.key, r.value]));
-    expect(obj[MANDATE_KEYS.payees]).toBe('weather.naap.eth');
-    expect(parseMandateRecords(obj)).toEqual({ payees: ['weather.naap.eth'], perTxCapUsd: 5, dailyCapBps: 1000, expiresAt: 1_800_000_000 });
+    expect(obj[MANDATE_KEYS.payees]).toBe('compute.naap.eth');
+    expect(parseMandateRecords(obj)).toEqual({ payees: ['compute.naap.eth'], perTxCapUsd: 5, dailyCapBps: 1000, expiresAt: 1_800_000_000 });
   });
   it('fractional caps survive', () => {
     const obj = Object.fromEntries(encodeMandateRecords({ ...m, perTxCapUsd: 2.5 }).map((r) => [r.key, r.value]));
@@ -48,7 +48,7 @@ describe('mandate records', () => {
   it('returns null when nothing is written and throws on garbage', () => {
     expect(parseMandateRecords({})).toBeNull();
     expect(parseMandateRecords({ [MANDATE_KEYS.payees]: '', [MANDATE_KEYS.perTxCapUsd]: '5' })).toBeNull();
-    expect(() => parseMandateRecords({ [MANDATE_KEYS.payees]: 'weather.naap.eth', [MANDATE_KEYS.perTxCapUsd]: 'lots' })).toThrow(/malformed/);
+    expect(() => parseMandateRecords({ [MANDATE_KEYS.payees]: 'compute.naap.eth', [MANDATE_KEYS.perTxCapUsd]: 'lots' })).toThrow(/malformed/);
   });
 });
 

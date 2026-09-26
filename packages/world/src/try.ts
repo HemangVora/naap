@@ -27,7 +27,7 @@ const startedAt = Date.now();
 const handle = await stepUp.request({
   carId: 'try',
   intentId: `try-${startedAt}`,
-  summary: 'Pay $40 to weather.naap.eth for the 7-day forecast',
+  summary: 'Pay $40 to compute.naap.eth for a 40-hour GPU block',
   ttlSec,
   allowApproval: true,
 });

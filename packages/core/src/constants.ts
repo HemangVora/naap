@@ -1,6 +1,6 @@
 import { BARRIER_ORDER, DEFAULT_TRACK_ID, type TrackSpec } from './types.js';
 
-/** The product's ENS parent. Every car is `<id>.<parent>`; the weather payee is `weather.<parent>`. */
+/** The product's ENS parent. Every car is `<id>.<parent>`; the payee (a GPU compute seller) is `compute.<parent>`. */
 export const DEFAULT_PARENT_ENS = 'naap.eth';
 
 /**
@@ -15,11 +15,14 @@ function parentFromEnv(): string | undefined {
 }
 
 export const PARENT_ENS: string = parentFromEnv() ?? DEFAULT_PARENT_ENS;
-export const WEATHER_PAYEE_ENS = `weather.${PARENT_ENS}`;
+/** The one mandate payee: a GPU compute seller the car buys inference from over x402. */
+export const PAYEE_ENS = `compute.${PARENT_ENS}`;
+/** @deprecated Old name from when the payee sold weather reports; same value as PAYEE_ENS. */
+export const WEATHER_PAYEE_ENS = PAYEE_ENS;
 
 /** Default mandate every car gets (CONTRACT.md §Mandate). */
 export const DEFAULT_MANDATE = {
-  payees: [WEATHER_PAYEE_ENS],
+  payees: [PAYEE_ENS],
   perTxCapUsd: 5,
   dailyCapBps: 1000, // 10% of balance
   ttlSec: 7 * 24 * 3600,

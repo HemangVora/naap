@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FAKE_WEATHER } from '@crumple/core';
+import { FAKE_PAYEE } from '@crumple/core';
 import { agentAccountFor, canonicalMandateJson, createLocalMandateSource, createLocalRatingWriter } from './local.js';
 
 const OWNER = '0x0000000000000000000000000000000000000001' as const;
@@ -11,13 +11,13 @@ describe('local mandate source', () => {
     const created = await src.createForCar('Zx9', OWNER);
     expect(created.ensName).toBe('zx9.naap.eth');
     expect(created.source).toBe('local');
-    expect(created.payees).toEqual([{ ens: 'weather.naap.eth', address: FAKE_WEATHER }]);
+    expect(created.payees).toEqual([{ ens: 'compute.naap.eth', address: FAKE_PAYEE }]);
     const got = await src.get('ZX9.naap.eth');
     expect(got.owner).toBe(OWNER);
     expect(got.perTxCapUsd).toBe(5);
     expect(got.dailyCapBps).toBe(1000);
     expect(got.expiresAt).toBeGreaterThan(Date.now() / 1000);
-    expect(await src.resolve('weather.naap.eth')).toBe(FAKE_WEATHER);
+    expect(await src.resolve('compute.naap.eth')).toBe(FAKE_PAYEE);
     expect(await src.resolve('zx9.naap.eth')).toBe(OWNER);
     expect(await src.resolve('nobody.naap.eth')).toBeNull();
     expect(src.status('zx9.naap.eth')).toBe('confirmed');
@@ -25,7 +25,7 @@ describe('local mandate source', () => {
   });
 
   it('envelope is EIP-191 signed by the configured signer and tampering is detected', async () => {
-    const src = createLocalMandateSource({ signerPk: PK, weatherAddress: '0x2222222222222222222222222222222222222222' });
+    const src = createLocalMandateSource({ signerPk: PK, payeeAddress: '0x2222222222222222222222222222222222222222' });
     await src.createForCar('t1', OWNER);
     const env = src.envelope('t1.naap.eth')!;
     expect(env.signer).toBe(src.signer);

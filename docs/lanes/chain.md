@@ -21,7 +21,7 @@ anvil Base fork · funding · EIP-3009 settle · x402 seller helpers · DRB · D
   - `decodeXPayment(header)` (base64 JSON → `PaymentPayload`, strict shape check) · `createXPayment(account, req)` (buyer side, tests/drivers).
   - `verifyPayment(xPayment, req)` → scheme/network, `to === payTo`, `value ≥ maxAmountRequired`, `validAfter ≤ now`, `validBefore ≥ now+6 s`, EIP-712 recovery equals `authorization.from`. Returns `{ valid, auth, payer, amountUsd }` or `{ valid:false, reason }`. On-chain state (balance, nonce reuse) is caught by `settle()`'s simulation.
 - **DRB (stretch, done):** `DRB_ADDRESS = 0x3ec2156D4c0A9CBdAB4a016633b7BcF6a8d68Ea2` (DebtReliefBot, Clanker, 18 dp, no EIP-3009). Faucet = Uniswap V3 DRB/WETH pool `0x5116…8923` impersonated (3.96e27 units at the pinned block). `DRB_DISABLED=1` turns it off → grok-morse uses USDC.
-- Smoke: `pnpm --filter @crumple/chain smoke` → fork, fund $500, x402 402→sign→verify→settle $1 to weather (paid 1 / loss 0), bare $450 to attacker (loss 450), replay refused, re-fund to exactly $500, DRB 250 via sendRaw. Runs in ~2–3 s warm.
+- Smoke: `pnpm --filter @crumple/chain smoke` → fork, fund $500, x402 402→sign→verify→settle $1 to the payee (paid 1 / loss 0), bare $450 to attacker (loss 450), replay refused, re-fund to exactly $500, DRB 250 via sendRaw. Runs in ~2–3 s warm.
 - Root `Dockerfile`, `.dockerignore`, `railway.json` (Dockerfile builder, healthcheck `/healthz`).
 
 ## Run it
@@ -39,7 +39,7 @@ import { startFork, createChain, paymentRequiredBody, paymentRequirements, verif
 const fork = await startFork();                       // BASE_RPC_URL, FORK_BLOCK, ANVIL_PORT from env
 const chain = createChain({ rpcUrl: fork.rpcUrl });    // FACILITATOR_PK from env
 await chain.verifyUsdcDomain();                        // boot-time assertion
-// /x402/weather/report: no X-PAYMENT → 402 paymentRequiredBody(req); with header → verifyPayment → chain.settle(v.auth)
+// /x402/compute/inference (alias /x402/weather/report): no X-PAYMENT → 402 paymentRequiredBody(req); with header → verifyPayment → chain.settle(v.auth)
 ```
 
 Env: `BASE_RPC_URL` (required, never logged), `FORK_BLOCK` (empty = 51813000, or `latest`), `FACILITATOR_PK` (anvil #0 ok), `ANVIL_PORT` (8545), `ANVIL_PATH`, `DRB_DISABLED`.

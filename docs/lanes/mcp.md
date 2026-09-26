@@ -87,5 +87,5 @@ claude mcp remove naap-test
 
 - No auth on `/mcp` beyond the cooldown + queue cap (same posture as `POST /api/cars`).
 - The agent sees a JSON tool result, not a live 402 over HTTP; a connected agent that wants the real seller can hit
-  `/x402/weather/report`.
+  `/x402/compute/inference` (old path `/x402/weather/report` kept as an alias).
 - Sessions are in-memory: a server restart ends every MCP car (the phone page shows the run as errored barriers).

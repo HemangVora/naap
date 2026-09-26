@@ -3,15 +3,15 @@
 //   1. relayer key (generated into .env if missing)  2. Sepolia ETH check (exits with human steps if unfunded)
 //   3. deploy UserRegistry + PermissionedResolver proxies via VerifiableFactory  4. mint/approve MockUSDC
 //   5. commit → wait 60 s → register <parent> with subregistry+resolver  6. per-key ROLE_SET_TEXT grants
-//   7. setParent  8. seed weather.<parent> if WEATHER_ADDRESS is set
+//   7. setParent  8. seed compute.<parent> if PAYEE_ADDRESS is set
 import { encodeFunctionData, formatUnits, parseEventLogs, toHex, zeroAddress, zeroHash } from 'viem';
 import { randomBytes } from 'node:crypto';
-import { PARENT_ENS, WEATHER_PAYEE_ENS, type Address, type Hex } from '@crumple/core';
+import { PARENT_ENS, PAYEE_ENS, type Address, type Hex } from '@crumple/core';
 import { ethRegistrarAbi, mockErc20Abi, registryAbi, resolverAbi, verifiableFactoryAbi } from '../abi.js';
 import { ENSV2, REGISTRAR, RELAYER_REGISTRY_ROLES, RELAYER_RESOLVER_ROLES, RESOLVER_ROLES } from '../addresses.js';
 import { sleep } from '../nonceQueue.js';
 import { ALL_TEXT_KEYS, PARENT_LABEL, labelId, resolverResource } from '../records.js';
-import { seedWeather } from '../seed.js';
+import { seedPayee } from '../seed.js';
 import { addrLink, ensLink, ensureRelayer, loadState, requireFunded, saveState, say, sourceFor, txLink } from './common.js';
 
 const { relayer, env } = ensureRelayer();
@@ -175,15 +175,16 @@ if (missing.length) {
   say(`granted ROLE_SET_TEXT for [${missing.join(', ')}] to the relayer  ${txLink(r.hash)}`);
 } else say('ROLE_SET_TEXT grants already in place for every mandate/rating key');
 
-// ── weather.<parent> ────────────────────────────────────────────────────
-const weatherAddress = (process.env.WEATHER_ADDRESS && /^0x[0-9a-fA-F]{40}$/.test(process.env.WEATHER_ADDRESS) ? process.env.WEATHER_ADDRESS : undefined) as Address | undefined;
-if (weatherAddress) {
+// ── compute.<parent> ────────────────────────────────────────────────────
+const payeeEnv = process.env.PAYEE_ADDRESS ?? process.env.WEATHER_ADDRESS; // WEATHER_ADDRESS: deprecated name
+const payeeAddress = (payeeEnv && /^0x[0-9a-fA-F]{40}$/.test(payeeEnv) ? payeeEnv : undefined) as Address | undefined;
+if (payeeAddress) {
   const src = sourceFor(relayer, env);
-  const w = await seedWeather(src, weatherAddress);
-  state.weather = { address: weatherAddress, tx: w.addrTx ?? state.weather?.tx };
+  const w = await seedPayee(src, payeeAddress);
+  state.payee = { address: payeeAddress, tx: w.addrTx ?? state.payee?.tx };
   saveState(state);
-  say(`${WEATHER_PAYEE_ENS} → ${w.resolved}${w.addrTx ? `  ${txLink(w.addrTx)}` : ' (already set)'}`);
-} else say(`WEATHER_ADDRESS not set — run \`pnpm --filter @crumple/ens seed-weather <address>\` when lane intercepta picks it`);
+  say(`${PAYEE_ENS} → ${w.resolved}${w.addrTx ? `  ${txLink(w.addrTx)}` : ' (already set)'}`);
+} else say(`PAYEE_ADDRESS not set — run \`pnpm --filter @crumple/ens seed-payee <address>\` when lane intercepta picks it`);
 
 say('');
 say('DONE');

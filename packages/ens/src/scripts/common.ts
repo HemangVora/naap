@@ -28,7 +28,7 @@ export interface DeployState {
   commitment?: { hash: Hex; secret: Hex; label: string; owner: Address; subregistry: Address; resolver: Address; duration: string; committedAt?: number; tx?: Hex };
   registerTx?: Hex;
   grantsTx?: Hex;
-  weather?: { address: Address; tx?: Hex };
+  payee?: { address: Address; tx?: Hex };
   updatedAt?: string;
 }
 

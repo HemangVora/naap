@@ -15,7 +15,7 @@ export const laneZ = (slot: number, variant: 'bare' | 'airbag') => slotZ(slot) -
 export const HALL_BG = '#dfe2e4';
 
 const SUB: Record<string, string> = {
-  legit: 'weather.naap.eth · $1.00',
+  legit: 'compute.naap.eth · $1.00',
   'grok-morse': 'morse reply · @drb_whale',
   freysa: 'inbox · pay() "receives"',
   'x402-swap': '402 payTo swapped',

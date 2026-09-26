@@ -8,7 +8,7 @@ import type {
 } from './types.js';
 import { DEFAULT_MANDATE, PARENT_ENS } from './constants.js';
 
-export const FAKE_WEATHER: Address = '0x1111111111111111111111111111111111111111';
+export const FAKE_PAYEE: Address = '0x1111111111111111111111111111111111111111';
 export const FAKE_ATTACKER: Address = '0xbad0000000000000000000000000000000000bad';
 export const FAKE_OWNER: Address = '0x0000000000000000000000000000000000000001';
 
@@ -19,7 +19,7 @@ export function addrFromSeed(seed: string): Address {
 }
 
 export class FakeMandateSource implements MandateSource {
-  names = new Map<string, Address>([['weather.naap.eth', FAKE_WEATHER]]);
+  names = new Map<string, Address>([['compute.naap.eth', FAKE_PAYEE]]);
   mandates = new Map<string, Mandate>();
   async createForCar(carId: string, owner: Address): Promise<Mandate> {
     const m: Mandate = {

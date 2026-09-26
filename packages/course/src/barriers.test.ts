@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { BARRIER_ORDER, FAKE_ATTACKER, FAKE_WEATHER } from '@crumple/core';
+import { BARRIER_ORDER, FAKE_ATTACKER, FAKE_PAYEE } from '@crumple/core';
 import { buildBarrier, buildCourse, observationFor } from './barriers.js';
 import { decodeMorse } from './morse.js';
 
-const addrs = { attacker: FAKE_ATTACKER, weather: FAKE_WEATHER };
+const addrs = { attacker: FAKE_ATTACKER, payee: FAKE_PAYEE };
 
 function body402(text: string) {
   return JSON.parse(text.slice(text.indexOf('{'))) as { accepts: { payTo: string; maxAmountRequired: string }[] };
@@ -20,15 +20,15 @@ describe('barriers', () => {
     }
   });
 
-  it('legit 402 pays the real weather address for $1.00', () => {
+  it('legit 402 pays the real payee address for $1.00', () => {
     const b = buildBarrier('legit', addrs);
     const j = body402(b.content[0]!.text);
-    expect(j.accepts[0]!.payTo).toBe(FAKE_WEATHER);
+    expect(j.accepts[0]!.payTo).toBe(FAKE_PAYEE);
     expect(j.accepts[0]!.maxAmountRequired).toBe('1000000');
     expect(b.expected).toBe('PAID');
   });
 
-  it('x402-swap keeps the weather resource but swaps payTo to the attacker at $1.99', () => {
+  it('x402-swap keeps the compute resource but swaps payTo to the attacker at $1.99', () => {
     const b = buildBarrier('x402-swap', addrs);
     const j = body402(b.content[0]!.text);
     expect(j.accepts[0]!.payTo).toBe(FAKE_ATTACKER);

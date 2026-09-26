@@ -1,6 +1,6 @@
 // Address picks for the course (CONTRACT.md §The course, §Intercepta).
 // ATTACKERS: real mainnet addresses that Intercepta Quick Scan should flag.
-// WEATHER: a fresh EOA derived from WEATHER_SEED (viem) that should scan PASS.
+// PAYEE: a fresh EOA derived from PAYEE_SEED (legacy: WEATHER_SEED) via viem that should scan PASS.
 // `verified` is read from data/intercepta-probe.json, written by `pnpm --filter @crumple/intercepta probe`
 // once the API key has arrived. Until then every pick is verified:false.
 import { existsSync, readFileSync } from 'node:fs';
@@ -13,7 +13,7 @@ export interface AddressPick {
   address: Address;
   label: string;
   chain: 'ethereum' | 'base';
-  /** Public evidence that the address is flagged (or, for WEATHER, how it was derived). */
+  /** Public evidence that the address is flagged (or, for PAYEE, how it was derived). */
   source: string;
   /** true only after the probe saw the expected live verdict for this address. */
   verified: boolean;
@@ -57,22 +57,27 @@ export const ATTACKER_CANDIDATES: AddressPick[] = [
 export const BASE_USDC: Address = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 export const BASE_CHAIN_ID = 8453;
 
-/** Dev-only seed when WEATHER_SEED is unset. The address it yields is never used for a prize run. */
-export const DEV_WEATHER_SEED = 'crumple-weather-dev-seed';
+/** Payee seed: PAYEE_SEED wins; WEATHER_SEED is the deprecated name kept so existing .env files still work. */
+export function payeeSeedFromEnv(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  return env.PAYEE_SEED?.trim() || env.WEATHER_SEED?.trim() || undefined;
+}
+
+/** Dev-only seed when PAYEE_SEED (or legacy WEATHER_SEED) is unset. The address it yields is never used for a prize run. */
+export const DEV_PAYEE_SEED = 'crumple-weather-dev-seed';
 
 /**
- * Derivation shared with anyone who needs the weather key: if WEATHER_SEED is a 0x-prefixed 32-byte hex it IS the
+ * Derivation shared with anyone who needs the payee key: if the payee seed is a 0x-prefixed 32-byte hex it IS the
  * private key; otherwise privateKey = keccak256(utf8(seed)). See docs/requests/intercepta.md.
  */
-export function weatherPrivateKey(seed: string): `0x${string}` {
+export function payeePrivateKey(seed: string): `0x${string}` {
   if (isHex(seed) && seed.length === 66) return seed;
   return keccak256(toBytes(seed));
 }
-export function weatherAccount(seed = process.env.WEATHER_SEED || DEV_WEATHER_SEED) {
-  return privateKeyToAccount(weatherPrivateKey(seed));
+export function payeeAccount(seed = payeeSeedFromEnv() || DEV_PAYEE_SEED) {
+  return privateKeyToAccount(payeePrivateKey(seed));
 }
-export function weatherAddress(seed = process.env.WEATHER_SEED || DEV_WEATHER_SEED): Address {
-  return weatherAccount(seed).address;
+export function payeeAddress(seed = payeeSeedFromEnv() || DEV_PAYEE_SEED): Address {
+  return payeeAccount(seed).address;
 }
 
 // ─── Probe evidence (data/intercepta-probe.json) ─────────────────────────────
@@ -81,7 +86,7 @@ export interface ProbeFile {
   at: number;
   live: boolean;
   budget: { used: number; ceiling: number; remaining: number };
-  picks: (AddressPick & { role: 'attacker' | 'weather' | 'token' })[];
+  picks: (AddressPick & { role: 'attacker' | 'payee' | 'token' })[];
 }
 
 export function readProbe(path = DEFAULT_PROBE_PATH): ProbeFile | null {
@@ -102,7 +107,7 @@ function applyProbe<T extends AddressPick>(pick: T, probe: ProbeFile | null, wan
 }
 
 const probe = readProbe();
-const seedIsSet = Boolean(process.env.WEATHER_SEED);
+const seedIsSet = Boolean(payeeSeedFromEnv());
 
 const candidatesWithEvidence = ATTACKER_CANDIDATES.map((c) => applyProbe(c, probe, 'BLOCK'));
 // Prefer verified ones; keep declaration order otherwise.
@@ -112,19 +117,19 @@ const ordered = [...candidatesWithEvidence.filter((c) => c.verified), ...candida
 export const ATTACKER_PICKS: [AddressPick, AddressPick] = [ordered[0], ordered[1]];
 export const ATTACKERS: [Address, Address] = [ATTACKER_PICKS[0].address, ATTACKER_PICKS[1].address];
 
-/** The weather payee (weather.naap.eth → this address). */
-export const WEATHER_PICK: AddressPick = applyProbe(
+/** The compute payee (compute.naap.eth → this address). */
+export const PAYEE_PICK: AddressPick = applyProbe(
   {
-    address: weatherAddress(),
-    label: seedIsSet ? 'weather.naap.eth payee (fresh EOA from WEATHER_SEED)' : 'weather payee (DEV seed — set WEATHER_SEED)',
+    address: payeeAddress(),
+    label: seedIsSet ? 'compute.naap.eth payee (fresh EOA from PAYEE_SEED)' : 'compute payee (DEV seed — set PAYEE_SEED)',
     chain: 'base',
-    source: 'derived: privateKeyToAccount(keccak256(utf8(WEATHER_SEED))) via viem; never funded before the event',
+    source: 'derived: privateKeyToAccount(keccak256(utf8(PAYEE_SEED))) via viem; never funded before the event',
     verified: false,
   },
   probe,
   'PASS',
 );
-export const WEATHER: Address = WEATHER_PICK.address;
+export const PAYEE: Address = PAYEE_PICK.address;
 
 export const TOKEN_PICK: AddressPick = applyProbe(
   {

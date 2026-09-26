@@ -20,7 +20,7 @@ Agent-wallet losses so far share one cause: **the thing that executes acts on te
 |---|---|---|
 | Grok × Bankrbot, May 2026 (~$150–200K) | A Morse-coded reply was executed as an authenticated command | The payee came from UNTRUSTED text → **refused** (`PROVENANCE_PAYEE`) |
 | Freysa, Nov 2024 ($47K) | The attacker redefined what `approveTransfer` means, in chat | The amount came from a message that redefined `pay()` → **refused** (`PROVENANCE_AMOUNT`) |
-| x402 payee swap (arXiv 2605.11781) | A poisoned 402 response swaps `payTo` | `payTo` must equal `resolve(weather.naap.eth)`, never text → **refused** |
+| x402 payee swap (arXiv 2605.11781) | A poisoned 402 response swaps `payTo` | `payTo` must equal `resolve(compute.naap.eth)`, never text → **refused** |
 | Lobstar Wilde, Feb 2026 ($441K) | No caps, and state was lost | Per-tx and daily caps; anything over needs a **World ID** step-up |
 
 Every control written as a prompt failed in those incidents. So Sekisho's controls are not prompts. The model **never** produces an address or an amount that reaches the signer.
@@ -43,7 +43,7 @@ Every control written as a prompt failed in those incidents. So Sekisho's contro
 ## Sponsor integrations
 
 ### World ID for Agents: the step-up
-- Over-limit payments (e.g. a $40 forecast against a $5 cap) need a **fresh World ID proof from the owner**.
+- Over-limit payments (e.g. a $40 GPU block against a $5 cap) need a **fresh World ID proof from the owner**.
 - It uses an OIDC device grant against `sandbox.auth.world.org`. The QR and code appear on the big screen.
 - The backend validates the ID token: RS256/JWKS, `iss`, `aud`, `exp`, and `auth_time` ≥ request time.
 - Only then does the signer sign.
@@ -54,7 +54,7 @@ Every control written as a prompt failed in those incidents. So Sekisho's contro
 ### Intercepta: live screening decides the payment
 - Every payment Sekisho would sign gets a live **Quick Scan** of `payTo` plus **Scan Token** of the token (Base, 8453).
 - A BLOCK or HOLD refuses the payment, and the first `traits[].description` is shown as the reason.
-- The weather payee and USDC scan PASS, so a legit payment goes through. The two attacker addresses scan BLOCK with score 100: an Inferno Drainer target and the Bybit exploiter.
+- The compute payee and USDC scan PASS, so a legit payment goes through. The two attacker addresses scan BLOCK with score 100: an Inferno Drainer target and the Bybit exploiter.
 - Results are cached per address, with a request budget.
 - Code: [`screener.ts#L135`](packages/intercepta/src/screener.ts#L135) and [`policy.ts#L131`](packages/sekisho/src/policy.ts#L131).
 - Live probe evidence: [`data/intercepta-probe.json`](data/intercepta-probe.json).
@@ -62,7 +62,7 @@ Every control written as a prompt failed in those incidents. So Sekisho's contro
 ### ENS: the mandate *is* an ENS name
 - `naap.eth` is registered on **ENSv2 Sepolia** ([register tx](https://sepolia.etherscan.io/tx/0x6bc8fa48135d0e99f6ed5153d16cd74b718db97317cd2141430e3272fa803e94)). Every car becomes a subname, `<car>.naap.eth` (e.g. [`naap-demo.naap.eth`](https://sepolia.app.ens.domains/naap-demo.naap.eth)). The parent is `PARENT_ENS` in `@crumple/core`; `ENS_PARENT=<label>.eth` overrides it.
 - Its **mandate** lives in text records: `sekisho.payees`, `sekisho.perTxCapUsd`, `sekisho.dailyCapBps`, `sekisho.expiresAt`.
-- Payees are ENS names, resolved at read time. `weather.naap.eth` resolves to the payee.
+- Payees are ENS names, resolved at read time. `compute.naap.eth` (a GPU compute seller) resolves to the payee.
 - **Enhanced access control:** the relayer holds `ROLE_SET_TEXT` scoped per record key. The agent's key holds no roles, so its attempt to edit its own mandate **reverts on-chain** with `EACUnauthorizedAccountRoles` (`pnpm --filter @crumple/ens prove-eac`; [on-chain revert](https://sepolia.etherscan.io/tx/0x9951d8731dacf9bb8635515a5e77ea76794d69a64115d2976710fc4b3a3c38fb)).
 - After each run, the NCAP rating is written as `naap.*` text records.
 - Code: [`ens.ts`](packages/ens/src/ens.ts#L160), [`rating.ts`](packages/ens/src/rating.ts#L45), [`eac.ts`](packages/ens/src/eac.ts). Deployment: [`deployment.naap.sepolia.json`](packages/ens/deployment.naap.sepolia.json) (the earlier `crumple.eth` parent: [`deployment.crumple.sepolia.json`](packages/ens/deployment.crumple.sepolia.json)).
@@ -87,7 +87,7 @@ NODE_ENV=development pnpm --filter @crumple/server start   # starts the Base for
 - **Arena:** `/`. Demo loop without a server: `/?mock=1`.
 - **Phones:** `/join`. The presenter's car is `/join?owner=<OWNER_TOKEN>`.
 - **Tests:** `pnpm test` (185 tests) and `pnpm typecheck`.
-- **One-time ENS setup:** `pnpm --filter @crumple/ens register`, then `seed-weather`, then `prove-eac`.
+- **One-time ENS setup:** `pnpm --filter @crumple/ens register`, then `seed-payee`, then `prove-eac`.
 
 **Architecture and lane contract:** [CONTRACT.md](CONTRACT.md). Per-part notes are in `docs/lanes/`.
 

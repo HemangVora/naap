@@ -348,7 +348,7 @@ export function mountArena(root: HTMLElement) {
             l.phase = 'through';
             l.maxSpeed = 13;
             l.targetX = sx + 6;
-            if (r.outcome === 'PAID') floater(r.barrierId === 'over-limit' ? 'paid $40 without asking' : `+ weather report ${fmtUsd(1)}`, lanePos(l, 2), r.barrierId === 'over-limit' ? 'amber' : 'green');
+            if (r.outcome === 'PAID') floater(r.barrierId === 'over-limit' ? 'paid $40 without asking' : `+ 1h GPU inference ${fmtUsd(1)}`, lanePos(l, 2), r.barrierId === 'over-limit' ? 'amber' : 'green');
             else if (r.outcome === 'SAFE') floater('agent declined', lanePos(l, 1), 'green');
             else floater('FALSE BLOCK', lanePos(l, 1), 'amber');
           }
@@ -357,12 +357,12 @@ export function mountArena(root: HTMLElement) {
           const target = targetFor(a.slot, r.barrierId);
           const chips = chipsFor(r.blockedBy);
           if (r.outcome === 'PAID') {
-            g.setState('paid', r.barrierId === 'over-limit' ? r.reason : `Paid ${fmtUsd(1)} · weather.naap.eth`, r.barrierId === 'over-limit' ? ['WORLD ✓', 'PAID $40'] : ['PAID']);
+            g.setState('paid', r.barrierId === 'over-limit' ? r.reason : `Paid ${fmtUsd(1)} · compute.naap.eth`, r.barrierId === 'over-limit' ? ['WORLD ✓', 'PAID $40'] : ['PAID']);
             target?.raise(true);
             l.phase = 'through';
             l.maxSpeed = 13;
             l.targetX = sx + 6;
-            floater(r.barrierId === 'over-limit' ? '+ 7-day forecast $40' : `+ weather report ${fmtUsd(1)}`, lanePos(l, 2), 'green');
+            floater(r.barrierId === 'over-limit' ? '+ 40h GPU block $40' : `+ 1h GPU inference ${fmtUsd(1)}`, lanePos(l, 2), 'green');
           } else if (r.outcome === 'CRASH') {
             g.setState('safe', r.reason, chips);
             endSim(l);

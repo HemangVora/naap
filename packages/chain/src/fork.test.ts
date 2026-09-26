@@ -13,7 +13,7 @@ import { createXPayment, paymentRequirements, verifyPayment } from './x402.js';
 const hasRpc = !!process.env.BASE_RPC_URL;
 // NOT an anvil default key: those addresses carry EIP-7702 delegations on Base mainnet (fundCar clears code anyway)
 const car = privateKeyToAccount(keccak256(toHex('crumple:chain:test-car')));
-const weather = '0x1111111111111111111111111111111111111111' as const;
+const payee = '0x1111111111111111111111111111111111111111' as const;
 const attacker = '0xbad0000000000000000000000000000000000bad' as const;
 
 describe.skipIf(!hasRpc)('anvil Base fork', () => {
@@ -57,7 +57,7 @@ describe.skipIf(!hasRpc)('anvil Base fork', () => {
     expect(txHash).toMatch(/^0x[0-9a-f]{64}$/);
     expect(await chain.balanceUsd(car.address)).toBe(50);
     expect(await chain.authorizationUsed(car.address, auth.nonce)).toBe(true);
-    const loss = await chain.lossFromReceipt(txHash, [weather], car.address);
+    const loss = await chain.lossFromReceipt(txHash, [payee], car.address);
     expect(loss.lossUsd).toBe(450);
     expect(loss.paidUsd).toBe(0);
     expect(loss.transfers).toHaveLength(1);
@@ -67,20 +67,20 @@ describe.skipIf(!hasRpc)('anvil Base fork', () => {
 
   it('x402 flow: 402 → signed X-PAYMENT → verify → settle → paid, no loss', async () => {
     await chain.fundCar(car.address, 500);
-    const req = paymentRequirements({ payTo: weather, priceUsd: 1, resource: 'https://weather.naap.eth/report' });
+    const req = paymentRequirements({ payTo: payee, priceUsd: 1, resource: 'https://compute.naap.eth/v1/inference/1h' });
     const header = await createXPayment(car, req);
     const v = await verifyPayment(header, req);
     expect(v.valid).toBe(true);
     if (!v.valid) return;
     const { txHash } = await chain.settle(v.auth);
-    const loss = await chain.lossFromReceipt(txHash, [weather], car.address);
+    const loss = await chain.lossFromReceipt(txHash, [payee], car.address);
     expect(loss).toMatchObject({ lossUsd: 0, paidUsd: 1 });
     expect(await chain.balanceUsd(car.address)).toBe(499);
   });
 
   it('concurrent settles from one facilitator do not collide on nonces', async () => {
     await chain.fundCar(car.address, 500);
-    const auths = await Promise.all([1, 2, 3, 4].map((i) => signAuthorization(car, { to: weather, value: usdToUnits(i) })));
+    const auths = await Promise.all([1, 2, 3, 4].map((i) => signAuthorization(car, { to: payee, value: usdToUnits(i) })));
     const results = await Promise.all(auths.map((a) => chain.settle(a)));
     expect(new Set(results.map((r) => r.txHash)).size).toBe(4);
     expect(await chain.balanceUsd(car.address)).toBe(490);
@@ -98,7 +98,7 @@ describe.skipIf(!hasRpc)('anvil Base fork', () => {
     );
     const { txHash } = await chain.sendRaw(signed);
     expect(await chain.drbBalance(car.address)).toBe(DRB_START_UNITS - 10n ** 18n);
-    const loss = await chain.lossFromReceipt(txHash, [weather], car.address);
+    const loss = await chain.lossFromReceipt(txHash, [payee], car.address);
     expect(loss.lossUsd).toBe(0); // DRB is not priced in USD
     expect(loss.transfers).toEqual([{ token: DRB.address, from: car.address, to: getAddress(attacker), value: 10n ** 18n }]);
     await chain.fundCar(car.address, 500);

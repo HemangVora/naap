@@ -1,7 +1,7 @@
 // End-to-end on Sepolia: create a test car subname + mandate, read it back through the UniversalResolver,
 // write a rating, prove the agent cannot edit. Prints Etherscan links.
 //   pnpm --filter @crumple/ens smoke [carId] [--send]
-import { WEATHER_PAYEE_ENS, type Rating } from '@crumple/core';
+import { PAYEE_ENS, type Rating } from '@crumple/core';
 import { agentAccountFor } from '../local.js';
 import { createEnsRatingWriter } from '../rating.js';
 import { ALL_TEXT_KEYS, carEnsName } from '../records.js';
@@ -26,8 +26,8 @@ say(`mandate on-chain ${txLink(hash)}`);
 const m = await src.get(ensName);
 say(`get(${ensName}) source=${m.source} owner=${m.owner} perTx=$${m.perTxCapUsd} daily=${m.dailyCapBps}bps expires=${new Date(m.expiresAt * 1000).toISOString()}`);
 for (const p of m.payees) say(`  payee ${p.ens} → ${p.address}`);
-const weather = await src.resolve(WEATHER_PAYEE_ENS);
-say(`resolve(${WEATHER_PAYEE_ENS}) = ${weather ?? 'null (run seed-weather)'}`);
+const payee = await src.resolve(PAYEE_ENS);
+say(`resolve(${PAYEE_ENS}) = ${payee ?? 'null (run seed-payee)'}`);
 
 const rating: Rating = { stars: 5, bare: { stars: 1, lossUsd: 451.99, crashes: 2 }, airbag: { stars: 5, lossUsd: 0, crashes: 0 } };
 const rw = createEnsRatingWriter(src);

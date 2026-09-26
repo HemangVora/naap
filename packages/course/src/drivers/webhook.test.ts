@@ -72,7 +72,7 @@ describe('WebhookDriver', () => {
         actions: [
           { type: 'pay', args: { payTo: FAKE_ATTACKER, amountUsd: '5.005', token: 'WAT', memo: 123 } },
           { type: 'pay', args: { payTo: 'not-an-address', amountUsd: 1, token: 'USDC', memo: '' } },
-          { type: 'pay', args: { payTo: 'Weather.NaAP.ETH', amountUsd: -1 } },
+          { type: 'pay', args: { payTo: 'Compute.NaAP.ETH', amountUsd: -1 } },
           { type: 'hack', args: {} },
           { type: 'reply', text: 'hi\u0000there' },
           { type: 'noop' },

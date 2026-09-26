@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FAKE_ATTACKER, FAKE_WEATHER, FakeMandateSource, FakeScreener, FakeTripwire, GullibleDriver } from '@crumple/core';
+import { FAKE_ATTACKER, FAKE_PAYEE, FakeMandateSource, FakeScreener, FakeTripwire, GullibleDriver } from '@crumple/core';
 import { createSekisho } from './sekisho.js';
 import { barriers, car, courseGrokMorse, mandateFor, REAL_ATTACKER, scriptedLlm, session } from './test-fixtures.js';
 import { decodeObfuscations, readerUserMessage } from './reader.js';
@@ -14,23 +14,23 @@ async function setup() {
 }
 
 describe('full mode (built cars)', () => {
-  it('legit: pays $1 to weather via resolve(), amount OWNER_BOUNDED', async () => {
+  it('legit: pays $1 to payee via resolve(), amount OWNER_BOUNDED', async () => {
     const { sekisho, mandate, llm } = await setup();
     const s = session('legit');
-    const out = await sekisho.runBuilt(car, 'weather nerd', barriers.legit, mandate, s);
+    const out = await sekisho.runBuilt(car, 'GPU nerd', barriers.legit, mandate, s);
     expect(out.intents).toHaveLength(1);
     const [intent] = out.intents;
-    expect(intent.payTo).toMatchObject({ value: FAKE_WEATHER, label: 'TOOL' });
+    expect(intent.payTo).toMatchObject({ value: FAKE_PAYEE, label: 'TOOL' });
     expect(intent.amountUsd).toMatchObject({ value: 1, label: 'OWNER_BOUNDED' });
-    expect(intent.payeeEns?.value).toBe('weather.naap.eth');
+    expect(intent.payeeEns?.value).toBe('compute.naap.eth');
     expect(out.verdicts[0].decision).toBe('PAY');
     expect(out.verdicts[0].blockedBy).toEqual([]);
     expect(out.verdicts[0].checks.map((c) => c.control)).toEqual([
       'PROVENANCE_AMOUNT', 'PROVENANCE_PAYEE', 'TAINT', 'MANDATE_PAYEE', 'MANDATE_EXPIRED', 'CAP_TX', 'CAP_DAILY', 'INTERCEPTA', 'JEV_TRIPWIRE',
     ]);
-    expect(s.tainted).toBe(true); // the 402 body is untrusted, and weather is still in the mandate
+    expect(s.tainted).toBe(true); // the 402 body is untrusted, and payee is still in the mandate
     // the planner never saw content; the reader never saw the owner request
-    expect(llm.planCalls[0]).toEqual({ ownerRequest: barriers.legit.ownerRequest, persona: 'weather nerd', mandatePayees: ['weather.naap.eth'] });
+    expect(llm.planCalls[0]).toEqual({ ownerRequest: barriers.legit.ownerRequest, persona: 'GPU nerd', mandatePayees: ['compute.naap.eth'] });
     expect(llm.readCalls[0].indexes).toEqual([0]);
     expect(out.trace.map((t) => t.who)).toEqual(expect.arrayContaining(['tripwire', 'planner', 'reader', 'interpreter', 'policy', 'screen']));
   });
@@ -95,7 +95,7 @@ describe('full mode (built cars)', () => {
 
   it('x402-swap: the swapped 402 payTo stays UNTRUSTED and the reason shows both addresses', async () => {
     const { sekisho, mandate } = await setup();
-    const out = await sekisho.runBuilt(car, 'weather nerd', barriers['x402-swap'], mandate, session('x402-swap'));
+    const out = await sekisho.runBuilt(car, 'GPU nerd', barriers['x402-swap'], mandate, session('x402-swap'));
     expect(out.intents).toHaveLength(1);
     const [intent] = out.intents;
     expect(intent.payTo).toMatchObject({ value: FAKE_ATTACKER, label: 'UNTRUSTED' });
@@ -103,15 +103,15 @@ describe('full mode (built cars)', () => {
     const v = out.verdicts[0];
     expect(v.decision).toBe('REFUSE');
     expect(v.blockedBy[0]).toBe('PROVENANCE_PAYEE');
-    expect(v.reason).toBe(`402 said pay ${short(FAKE_ATTACKER)}, but weather.naap.eth resolves to ${short(FAKE_WEATHER)}`);
+    expect(v.reason).toBe(`402 said pay ${short(FAKE_ATTACKER)}, but compute.naap.eth resolves to ${short(FAKE_PAYEE)}`);
     expect(v.blockedBy).toContain('INTERCEPTA');
   });
 
-  it('over-limit: $40 to weather is a STEP_UP on CAP_TX, not a refusal', async () => {
+  it('over-limit: $40 to payee is a STEP_UP on CAP_TX, not a refusal', async () => {
     const { sekisho, mandate } = await setup();
-    const out = await sekisho.runBuilt(car, 'weather nerd', barriers['over-limit'], mandate, session('over-limit'));
+    const out = await sekisho.runBuilt(car, 'GPU nerd', barriers['over-limit'], mandate, session('over-limit'));
     expect(out.intents).toHaveLength(1);
-    expect(out.intents[0].payTo).toMatchObject({ value: FAKE_WEATHER, label: 'TOOL' });
+    expect(out.intents[0].payTo).toMatchObject({ value: FAKE_PAYEE, label: 'TOOL' });
     expect(out.intents[0].amountUsd).toMatchObject({ value: 40, label: 'OWNER_BOUNDED' });
     const v = out.verdicts[0];
     expect(v.decision).toBe('STEP_UP');
@@ -119,7 +119,7 @@ describe('full mode (built cars)', () => {
     expect(v.blockedBy).not.toContain('CAP_DAILY'); // $40 ≤ 10% of $500
     // the fake Jev flags "pay" in the 402 body; over cap, that is a friction chip — never a refusal
     expect(v.blockedBy.slice(1)).toEqual(['JEV_TRIPWIRE']);
-    expect(v.reason).toBe('$40 to weather.naap.eth (0x111111…1111) is over the $5 per-payment cap — asking the owner');
+    expect(v.reason).toBe('$40 to compute.naap.eth (0x111111…1111) is over the $5 per-payment cap — asking the owner');
   });
 
   it('a plan that names a raw address or an unknown ref is rejected and nothing is paid', async () => {
@@ -179,15 +179,15 @@ describe('boundary mode (connected cars)', () => {
     expect(v.reason).toMatch(/only mandate payees may be paid/);
   });
 
-  it('legit: the gullible driver pays the real weather address and is allowed through', async () => {
+  it('legit: the gullible driver pays the real payee address and is allowed through', async () => {
     const { sekisho, mandate } = await setup();
     const actions = await driver.act(barriers.legit);
     const out = await sekisho.runBoundary(car, barriers.legit, actions, mandate, session('legit'));
-    expect(out.intents[0].payTo.value).toBe(FAKE_WEATHER);
+    expect(out.intents[0].payTo.value).toBe(FAKE_PAYEE);
     expect(out.verdicts[0].decision).toBe('PAY');
   });
 
-  it('over-limit: $40 to weather steps up', async () => {
+  it('over-limit: $40 to payee steps up', async () => {
     const { sekisho, mandate } = await setup();
     const actions = await driver.act(barriers['over-limit']);
     const out = await sekisho.runBoundary(car, barriers['over-limit'], actions, mandate, session('over-limit'));
@@ -200,12 +200,12 @@ describe('boundary mode (connected cars)', () => {
     const out = await sekisho.runBoundary(
       car,
       barriers.legit,
-      [{ type: 'reply', text: 'ok' }, { type: 'noop' }, { type: 'pay', args: { payTo: 'weather.naap.eth', amountUsd: 1, token: 'USDC', memo: 'x' } }],
+      [{ type: 'reply', text: 'ok' }, { type: 'noop' }, { type: 'pay', args: { payTo: 'compute.naap.eth', amountUsd: 1, token: 'USDC', memo: 'x' } }],
       mandate,
       session('legit'),
     );
     expect(out.intents).toHaveLength(1);
-    expect(out.intents[0].payTo.value).toBe(FAKE_WEATHER);
+    expect(out.intents[0].payTo.value).toBe(FAKE_PAYEE);
     expect(out.verdicts[0].decision).toBe('PAY');
   });
 });

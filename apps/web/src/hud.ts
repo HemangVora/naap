@@ -6,7 +6,14 @@ import { BRAND, brandHeader } from './brand';
 
 const KIND: Record<string, string> = { built: 'built', webhook: 'webhook', openai: 'openai', mcp: 'your agent · MCP' };
 
-export function createHud(root: HTMLElement, store: Store, opts: { mock: boolean; minimap?: HTMLElement; sub?: string }) {
+/** Optional world sound control (world/audio.ts WorldAudio fits). */
+export interface HudSound {
+  isMuted: boolean;
+  toggle(): boolean;
+  onMute(f: (muted: boolean) => void): unknown;
+}
+
+export function createHud(root: HTMLElement, store: Store, opts: { mock: boolean; minimap?: HTMLElement; sub?: string; sound?: HudSound; hints?: string }) {
   const hud = el('div', { class: 'hud' });
 
   // top: logo + four stat tiles (only numbers that make sense)
@@ -14,6 +21,27 @@ export function createHud(root: HTMLElement, store: Store, opts: { mock: boolean
   const tiles = el('div', { class: 'tiles' });
   const pills = el('div', { class: 'pills' });
   const top = el('div', { class: 'hud-top' }, wordmark, tiles, pills);
+  let soundBtn: HTMLButtonElement | null = null;
+  if (opts.sound) {
+    const snd = opts.sound;
+    soundBtn = el('button', {
+      class: 'hud-sound',
+      html: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 6h3l4-3v10l-4-3H2z" fill="currentColor"/><path class="waves" d="M11 5.5a3.5 3.5 0 0 1 0 5M12.8 3.5a6 6 0 0 1 0 9"/><path class="cross" d="M11 6l4 4M15 6l-4 4"/></svg><span></span>',
+    }) as HTMLButtonElement;
+    const paint = (m: boolean) => {
+      soundBtn!.classList.toggle('off', m);
+      soundBtn!.querySelector('span')!.textContent = m ? 'SOUND OFF' : 'SOUND ON';
+      soundBtn!.title = m ? 'Unmute (M)' : 'Mute (M)';
+    };
+    paint(snd.isMuted);
+    snd.onMute(paint);
+    soundBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      snd.toggle();
+      soundBtn!.blur();
+    });
+    top.append(soundBtn);
+  }
 
   // rails
   const board = el('div', { class: 'board' });
@@ -32,7 +60,8 @@ export function createHud(root: HTMLElement, store: Store, opts: { mock: boolean
   QRCode.toCanvas(qrCanvas, joinUrl, { margin: 1, width: 232, color: { dark: '#0d0e11', light: '#f2efe8' } }).catch(console.warn);
   const qr = el('div', { class: 'qr-card' }, qrCanvas, el('div', { class: 'cta', html: `Crash-test your agent<small>${esc(joinUrl.replace(/^https?:\/\//, ''))}</small>` }));
   const build = el('a', { class: 'build-btn', href: `/tracks/new${opts.mock ? '?mock=1' : ''}`, html: '<b>+</b> Build a track' });
-  const bottom = el('div', { class: 'hud-bottom' }, legend, el('div', { class: 'cta-stack' }, build, qr));
+  const legendCol = opts.hints ? el('div', {}, legend, el('div', { class: 'controls-hint', html: opts.hints })) : legend;
+  const bottom = el('div', { class: 'hud-bottom' }, legendCol, el('div', { class: 'cta-stack' }, build, qr));
 
   hud.append(top, left, mid, right, bottom);
   root.append(hud);
@@ -110,7 +139,7 @@ export function createHud(root: HTMLElement, store: Store, opts: { mock: boolean
         el('div', { class: 't', text: status === 'APPROVED' ? 'Owner approved via World ID' : status === 'EXPIRED' ? 'Step-up expired' : status === 'DENIED' ? 'Owner denied' : 'Owner step-up · World ID' }),
         el('div', { class: 's', text: su.result?.detail ?? su.summary }),
         su.userCode && !status ? el('div', { class: 'code', text: su.userCode }) : el('div', { class: 's', text: `${esc(owner!.car.name)} · ${BARRIER_SHORT[su.barrierId]}` }),
-        !status ? el('div', { class: 'ring', html: `<b>${left}s</b> left to approve on the owner phone` }) : el('div', { class: 'ring', text: status === 'APPROVED' ? 'Gate opens · $40 paid to weather.naap.eth' : 'Gate arm down · payment refused' }),
+        !status ? el('div', { class: 'ring', html: `<b>${left}s</b> left to approve on the owner phone` }) : el('div', { class: 'ring', text: status === 'APPROVED' ? 'Gate opens · $40 paid to compute.naap.eth' : 'Gate arm down · payment refused' }),
       );
     } else stepCard.style.display = 'none';
   };

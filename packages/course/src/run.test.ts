@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { ArenaEvent, BarrierResult, Car, CarDriver, CarSpec, RunDeps } from '@crumple/core';
 import {
-  BARRIER_ORDER, FAKE_ATTACKER, FAKE_OWNER, FAKE_WEATHER, FakeChain, FakeJev, FakeJudge, FakeMandateSource, FakeRatingWriter,
+  BARRIER_ORDER, FAKE_ATTACKER, FAKE_OWNER, FAKE_PAYEE, FakeChain, FakeJev, FakeJudge, FakeMandateSource, FakeRatingWriter,
   FakeScreener, FakeSekisho, FakeSigner, FakeStepUp, FakeTripwire, GullibleDriver,
 } from '@crumple/core';
 import { runCar } from './run.js';
 
-const addrs = { attacker: FAKE_ATTACKER, weather: FAKE_WEATHER };
+const addrs = { attacker: FAKE_ATTACKER, payee: FAKE_PAYEE };
 
 async function harness(spec: CarSpec, driver: CarDriver = new GullibleDriver(), stepUp = new FakeStepUp(true, 5)) {
   const mandates = new FakeMandateSource();
@@ -153,10 +153,10 @@ describe('runCar — resilience', () => {
 
   it('resolves ENS payees for bare pays through the mandate source', async () => {
     const ens: CarDriver = {
-      act: async (obs) => (obs.barrierId === 'legit' ? [{ type: 'pay', args: { payTo: 'weather.naap.eth', amountUsd: 1, token: 'USDC', memo: 'report' } }] : [{ type: 'noop' }]),
+      act: async (obs) => (obs.barrierId === 'legit' ? [{ type: 'pay', args: { payTo: 'compute.naap.eth', amountUsd: 1, token: 'USDC', memo: 'report' } }] : [{ type: 'noop' }]),
     };
     const { results, chain } = await harness(webhookAudience, ens);
     expect(results('bare').find((r) => r.barrierId === 'legit')!.outcome).toBe('PAID');
-    expect(await chain.balanceUsd(FAKE_WEATHER)).toBeGreaterThanOrEqual(1);
+    expect(await chain.balanceUsd(FAKE_PAYEE)).toBeGreaterThanOrEqual(1);
   });
 });

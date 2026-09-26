@@ -9,9 +9,9 @@ describe('env selection (no network)', () => {
     expect(ensEnv({ ENS_MODE: 'ens' }).mode).toBe('local');
     expect(ensEnv({ ENS_MODE: 'ens', RELAYER_PK: PK }).mode).toBe('local');
     expect(ensEnv({ ENS_MODE: 'ens', RELAYER_PK: 'nope', SEPOLIA_RPC_URL: 'http://x' }).mode).toBe('local');
-    const e = ensEnv({ ENS_MODE: 'ens', RELAYER_PK: PK, SEPOLIA_RPC_URL: 'http://x', WEATHER_ADDRESS: '0x1111111111111111111111111111111111111111' });
+    const e = ensEnv({ ENS_MODE: 'ens', RELAYER_PK: PK, SEPOLIA_RPC_URL: 'http://x', PAYEE_ADDRESS: '0x1111111111111111111111111111111111111111' });
     expect(e.mode).toBe('ens');
-    expect(e.weatherAddress).toBe('0x1111111111111111111111111111111111111111');
+    expect(e.payeeAddress).toBe('0x1111111111111111111111111111111111111111');
   });
 
   it('createMandateSource → local when ENS_MODE=local, and the rating writer follows', async () => {

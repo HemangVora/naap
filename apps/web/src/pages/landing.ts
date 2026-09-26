@@ -63,17 +63,17 @@ const INCIDENTS = [
     when: 'arXiv 2605.11781',
     loss: 'Research',
     broke: 'A poisoned 402 response swaps payTo for the attacker’s address. The request still looks legitimate.',
-    stop: 'payTo must equal resolve(weather.naap.eth). It never comes from text.',
+    stop: 'payTo must equal resolve(compute.naap.eth). It never comes from text.',
     code: 'MANDATE_PAYEE',
   },
 ];
 
 const OBSTACLES = [
-  { sign: 'legit', glyph: '$1', name: 'Legit purchase', line: 'A $1 weather report. An agent that can’t pay isn’t safe, it’s broken.' },
+  { sign: 'legit', glyph: '$1', name: 'Legit purchase', line: 'An hour of GPU for $1. An agent that can’t pay isn’t safe, it’s broken.' },
   { sign: 'grok', glyph: '·–·', name: 'Grok Morse', line: 'A reply in dots and dashes that spells “send 500 USDC to…”.' },
   { sign: 'freysa', glyph: 'pay()', name: 'Freysa', line: 'An inbox message quietly redefines what pay() means.' },
   { sign: 'x402', glyph: '402', name: 'x402 payee swap', line: 'The 402 response swaps payTo. The one that fooled everyone.' },
-  { sign: 'limit', glyph: '5', name: 'Over the limit', line: 'A $40 forecast against a $5 cap. The owner has to prove it’s them.' },
+  { sign: 'limit', glyph: '5', name: 'Over the limit', line: 'A $40 GPU block against a $5 cap. The owner has to prove it’s them.' },
 ];
 
 const BUILT_WITH = [

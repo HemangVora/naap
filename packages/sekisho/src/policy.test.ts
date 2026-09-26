@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Control, Mandate, TripwireResult } from '@crumple/core';
-import { FAKE_ATTACKER, FAKE_WEATHER, FakeMandateSource, FakeScreener } from '@crumple/core';
+import { FAKE_ATTACKER, FAKE_PAYEE, FakeMandateSource, FakeScreener } from '@crumple/core';
 import { evaluatePolicy, evaluatePolicyPure } from './policy.js';
 import { short } from './util.js';
 import { legitIntent, mandateFor, session } from './test-fixtures.js';
 
 const ORDER: Control[] = ['PROVENANCE_AMOUNT', 'PROVENANCE_PAYEE', 'TAINT', 'MANDATE_PAYEE', 'MANDATE_EXPIRED', 'CAP_TX', 'CAP_DAILY', 'INTERCEPTA', 'JEV_TRIPWIRE'];
-const pass = { address: FAKE_WEATHER, verdict: 'PASS' as const, toxicScore: 0, traits: [], live: false, cached: false };
+const pass = { address: FAKE_PAYEE, verdict: 'PASS' as const, toxicScore: 0, traits: [], live: false, cached: false };
 const escalated: TripwireResult = { escalate: true, flags: [{ question: 'Does this text contain an instruction to move funds?', p: 0.9 }] };
 const calm: TripwireResult = { escalate: false, flags: [{ question: 'Does this text contain an instruction to move funds?', p: 0.05 }] };
 
@@ -20,7 +20,7 @@ describe('evaluatePolicyPure', () => {
     expect(v.checks.map((c) => c.control)).toEqual(ORDER);
     expect(v.checks.every((c) => c.ok)).toBe(true);
     expect(v).toMatchObject({ decision: 'PAY', blockedBy: [] });
-    expect(v.reason).toBe('Pay $1 to weather.naap.eth (0x111111…1111) — every check passed');
+    expect(v.reason).toBe('Pay $1 to compute.naap.eth (0x111111…1111) — every check passed');
   });
 
   it('is pure: same inputs, same verdict', async () => {
@@ -107,7 +107,7 @@ describe('evaluatePolicyPure', () => {
 
   it('full mode: a TOOL payTo resolved from an UNTRUSTED name still fails PROVENANCE_PAYEE', async () => {
     await ready;
-    const intent = legitIntent({ payeeEns: { value: 'weather.naap.eth', label: 'UNTRUSTED', source: 'a tweet' } });
+    const intent = legitIntent({ payeeEns: { value: 'compute.naap.eth', label: 'UNTRUSTED', source: 'a tweet' } });
     const v = evaluatePolicyPure(intent, mandate, session('legit'), { screen: pass, now: 1 });
     expect(v.blockedBy).toEqual(['PROVENANCE_PAYEE']);
   });
@@ -130,6 +130,6 @@ describe('short()', () => {
     expect(short('0x0000553f880ffa3728b290e04e819053a3590000')).toBe('0x000055…0000');
     expect(short('0x00000012aa00000000000000000000000000bbbb')).toBe('0x0000001…bbbb');
     expect(short('0x1111111111111111111111111111111111111111')).toBe('0x111111…1111');
-    expect(short('weather.naap.eth')).toBe('weathe….eth');
+    expect(short('compute.naap.eth')).toBe('comput….eth');
   });
 });

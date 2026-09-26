@@ -13,7 +13,7 @@ import { ERC20_ABI } from './usdc.js';
 
 // NOT an anvil default key: those addresses carry EIP-7702 delegations on Base mainnet (fundCar clears code anyway)
 const car = privateKeyToAccount(keccak256(toHex('crumple:chain:smoke-car')));
-const weather = '0x1111111111111111111111111111111111111111' as const;
+const payee = '0x1111111111111111111111111111111111111111' as const;
 const attacker = '0xbad0000000000000000000000000000000000bad' as const;
 
 async function main() {
@@ -29,19 +29,19 @@ async function main() {
     console.log(`[smoke] car ${car.address} funded → $${await chain.balanceUsd(car.address)} USDC`);
 
     // 1) legit x402: 402 body → buyer signs → seller verifies → facilitator settles
-    const req = paymentRequirements({ payTo: weather, priceUsd: 1, resource: 'https://weather.naap.eth/report', description: "Today's Tokyo weather report" });
+    const req = paymentRequirements({ payTo: payee, priceUsd: 1, resource: 'https://compute.naap.eth/v1/inference/1h', description: "1 hour of GPU inference" });
     console.log('[smoke] 402 body:', JSON.stringify(paymentRequiredBody(req)));
     const header = await createXPayment(car, req);
     const v = await verifyPayment(header, req);
     if (!v.valid) throw new Error(`verifyPayment failed: ${v.reason}`);
     const legit = await chain.settle(v.auth);
-    const legitLoss = await chain.lossFromReceipt(legit.txHash, [weather], car.address);
+    const legitLoss = await chain.lossFromReceipt(legit.txHash, [payee], car.address);
     console.log(`[smoke] legit settled ${legit.txHash} · paid $${legitLoss.paidUsd} · loss $${legitLoss.lossUsd} · balance $${await chain.balanceUsd(car.address)}`);
 
     // 2) the crash: a bare wallet signs $450 to the attacker; the fork records the loss
     const bad = await signAuthorization(car, { to: attacker, value: usdToUnits(450) });
     const crash = await chain.settle(bad);
-    const crashLoss = await chain.lossFromReceipt(crash.txHash, [weather], car.address);
+    const crashLoss = await chain.lossFromReceipt(crash.txHash, [payee], car.address);
     console.log(`[smoke] attacker settled ${crash.txHash} · loss $${crashLoss.lossUsd} (to ${crashLoss.transfers[0]?.to}) · balance $${await chain.balanceUsd(car.address)}`);
 
     // 3) replay refused on-chain
@@ -65,7 +65,7 @@ async function main() {
         await wallet.prepareTransactionRequest({ to: DRB.address, data: encodeFunctionData({ abi: ERC20_ABI, functionName: 'transfer', args: [attacker, 250n * 10n ** 18n] }) }),
       );
       const { txHash } = await chain.sendRaw(signed);
-      const drbLoss = await chain.lossFromReceipt(txHash, [weather], car.address);
+      const drbLoss = await chain.lossFromReceipt(txHash, [payee], car.address);
       console.log(`[smoke] DRB sendRaw ${txHash} · transfers ${drbLoss.transfers.map((t) => `${t.value / 10n ** 18n} DRB → ${t.to}`).join(', ')} · balance ${(await chain.drbBalance(car.address)) / 10n ** 18n} DRB`);
     } else {
       console.log('[smoke] DRB disabled (DRB_DISABLED=1) — grok-morse uses USDC');

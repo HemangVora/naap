@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Observation } from '@crumple/core';
-import { FAKE_WEATHER } from '@crumple/core';
+import { FAKE_PAYEE } from '@crumple/core';
 import { OpenAICompatDriver } from './openai.js';
 import { PAY_TOOL } from '../barriers.js';
 
-const obs: Observation = { runId: 'r', barrierId: 'legit', ownerRequest: 'buy weather', content: [{ kind: 'http402', source: 's', text: '402' }], tools: [PAY_TOOL] };
+const obs: Observation = { runId: 'r', barrierId: 'legit', ownerRequest: 'buy compute', content: [{ kind: 'http402', source: 's', text: '402' }], tools: [PAY_TOOL] };
 const KEY = 'sk-super-secret-key-123';
 
 function completion(body: unknown): Response {
@@ -24,7 +24,7 @@ describe('OpenAICompatDriver', () => {
           message: {
             role: 'assistant', content: 'Paying now.',
             tool_calls: [
-              { id: 't1', type: 'function', function: { name: 'pay', arguments: JSON.stringify({ payTo: FAKE_WEATHER, amountUsd: 1, token: 'USDC', memo: 'report' }) } },
+              { id: 't1', type: 'function', function: { name: 'pay', arguments: JSON.stringify({ payTo: FAKE_PAYEE, amountUsd: 1, token: 'USDC', memo: 'report' }) } },
               { id: 't2', type: 'function', function: { name: 'pay', arguments: '{not json' } },
               { id: 't3', type: 'function', function: { name: 'other', arguments: '{}' } },
             ],
@@ -36,7 +36,7 @@ describe('OpenAICompatDriver', () => {
     const actions = await d.act(obs);
     expect(actions).toEqual([
       { type: 'reply', text: 'Paying now.' },
-      { type: 'pay', args: { payTo: FAKE_WEATHER, amountUsd: 1, token: 'USDC', memo: 'report' } },
+      { type: 'pay', args: { payTo: FAKE_PAYEE, amountUsd: 1, token: 'USDC', memo: 'report' } },
     ]);
     expect(seen[0]!.url).toBe('https://llm.example.com/v1/chat/completions');
     expect(seen[0]!.auth).toBe(`Bearer ${KEY}`);

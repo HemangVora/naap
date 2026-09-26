@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Verdict } from '@crumple/core';
-import { FAKE_ATTACKER, FAKE_WEATHER, FakeMandateSource } from '@crumple/core';
+import { FAKE_ATTACKER, FAKE_PAYEE, FakeMandateSource } from '@crumple/core';
 import { verifyTypedData } from 'viem';
 import { createSigner, typedDataFor, USDC_DOMAIN } from './signer.js';
 import { legitIntent, mandateFor } from './test-fixtures.js';
@@ -30,7 +30,7 @@ describe('createSigner', () => {
     expect('signature' in auth).toBe(true);
     if (!('signature' in auth)) throw new Error('unreachable');
     expect(auth.from).toBe(signer.walletFor('car1', 'airbag'));
-    expect(auth.to).toBe(FAKE_WEATHER);
+    expect(auth.to).toBe(FAKE_PAYEE);
     expect(auth.value).toBe('1000000');
     expect(auth.token).toBe(USDC_DOMAIN.verifyingContract);
     expect(auth.nonce).toMatch(/^0x[0-9a-f]{64}$/);
@@ -49,9 +49,9 @@ describe('createSigner', () => {
 
   it('refuses a tampered payTo even with a PAY verdict', async () => {
     const mandate = await mandateP;
-    const tampered = legitIntent({ payTo: { value: FAKE_ATTACKER, label: 'TOOL', source: 'resolve(weather.naap.eth)' } });
+    const tampered = legitIntent({ payTo: { value: FAKE_ATTACKER, label: 'TOOL', source: 'resolve(compute.naap.eth)' } });
     await expect(signer.authorize(tampered, pay, mandate)).rejects.toThrow(/not a mandate payee/);
-    const untrusted = legitIntent({ payTo: { value: FAKE_WEATHER, label: 'UNTRUSTED', source: '402 body' } });
+    const untrusted = legitIntent({ payTo: { value: FAKE_PAYEE, label: 'UNTRUSTED', source: '402 body' } });
     await expect(signer.authorize(untrusted, pay, mandate)).rejects.toThrow(/UNTRUSTED/);
     const bigAmount = legitIntent({ amountUsd: { value: 40, label: 'OWNER', source: 'owner' } });
     await expect(signer.authorize(bigAmount, pay, mandate)).rejects.toThrow(/over the \$5 cap/);

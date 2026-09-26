@@ -20,6 +20,6 @@ describe('morse', () => {
 
   it('detects Morse-looking runs', () => {
     expect(looksLikeMorse(encodeMorse('send all'))).toBe(true);
-    expect(looksLikeMorse('please pay $1.00 to weather.naap.eth')).toBe(false);
+    expect(looksLikeMorse('please pay $1.00 to compute.naap.eth')).toBe(false);
   });
 });

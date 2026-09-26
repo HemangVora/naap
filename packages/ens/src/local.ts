@@ -2,14 +2,14 @@
 // The UI must show "offline" when this is in use (Mandate.source === 'local').
 import { keccak256, stringToBytes, verifyMessage } from 'viem';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
-import { FAKE_WEATHER, WEATHER_PAYEE_ENS, type Address, type Hex, type Mandate, type MandateSource, type Rating, type RatingWriter } from '@crumple/core';
+import { FAKE_PAYEE, PAYEE_ENS, type Address, type Hex, type Mandate, type MandateSource, type Rating, type RatingWriter } from '@crumple/core';
 import { carEnsName, defaultMandateFor, encodeMandateRecords, labelOf, short } from './records.js';
 
 export interface LocalMandateConfig {
   /** Signing key (the relayer key when present). A throwaway key is generated when missing. */
   signerPk?: Hex;
-  /** weather.naap.eth → this address. Defaults to FAKE_WEATHER. */
-  weatherAddress?: Address;
+  /** compute.naap.eth → this address. Defaults to FAKE_PAYEE. */
+  payeeAddress?: Address;
   /** Extra name → address entries. */
   names?: Record<string, Address>;
   /** Seed for the agent key used in proveAgentCannotEdit (default 'crumple-agent'). */
@@ -54,7 +54,7 @@ export function agentAccountFor(carId: string, seed = 'crumple-agent') {
 
 export function createLocalMandateSource(cfg: LocalMandateConfig = {}): LocalMandateSource {
   const account = privateKeyToAccount(cfg.signerPk ?? generatePrivateKey());
-  const names = new Map<string, Address>([[WEATHER_PAYEE_ENS, cfg.weatherAddress ?? FAKE_WEATHER]]);
+  const names = new Map<string, Address>([[PAYEE_ENS, cfg.payeeAddress ?? FAKE_PAYEE]]);
   for (const [k, v] of Object.entries(cfg.names ?? {})) names.set(k.toLowerCase(), v);
   const store = new Map<string, SignedMandate>();
   const cbs: ((ensName: string, txHash: Hex | null) => void)[] = [];

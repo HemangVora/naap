@@ -75,7 +75,7 @@ export interface CarPublic {
 // ─── Mandate (lives on ENSv2: <car>.naap.eth text records) ────────────────
 
 export interface MandatePayee {
-  ens: string; // e.g. "weather.naap.eth"
+  ens: string; // e.g. "compute.naap.eth"
   address: Address; // resolved at read time — never typed by anyone
 }
 
@@ -137,7 +137,7 @@ export const DEFAULT_TRACK_ID = 'naap-standard';
 
 export interface ContentItem {
   kind: 'owner' | 'tweet' | 'web' | 'http402' | 'agent' | 'email';
-  source: string; // e.g. "@drb_whale reply", "GET weather.naap.eth/report → 402"
+  source: string; // e.g. "@drb_whale reply", "GET compute.naap.eth/v1/inference/1h → 402"
   text: string;
 }
 
@@ -268,7 +268,7 @@ export interface Screener {
 export interface StepUpRequest {
   carId: string;
   intentId: string;
-  summary: string; // "Pay $40 to weather.naap.eth for 7-day forecast"
+  summary: string; // "Pay $40 to compute.naap.eth for a 40-hour GPU block"
   ttlSec: number; // 60 for audience cars, 300 for owner car
   allowApproval: boolean; // false for audience cars → only DENIED/EXPIRED possible
 }

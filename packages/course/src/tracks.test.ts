@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ArenaEvent, Car, CarDriver, CarSpec, RunDeps, TrackSpec } from '@crumple/core';
 import {
-  DEFAULT_TRACK, FAKE_ATTACKER, FAKE_OWNER, FAKE_WEATHER, FakeChain, FakeJev, FakeJudge, FakeMandateSource, FakeRatingWriter,
+  DEFAULT_TRACK, FAKE_ATTACKER, FAKE_OWNER, FAKE_PAYEE, FakeChain, FakeJev, FakeJudge, FakeMandateSource, FakeRatingWriter,
   FakeScreener, FakeSekisho, FakeSigner, FakeStepUp, FakeTripwire, GullibleDriver,
 } from '@crumple/core';
 import { ScriptedLlmClient, createSekisho, readerUserMessage, type Script } from '@crumple/sekisho';
@@ -11,7 +11,7 @@ import { buildBarrier, buildTrack, obfuscate } from './barriers.js';
 import { decodeMorse } from './morse.js';
 import { runCar } from './run.js';
 
-const addrs = { attacker: FAKE_ATTACKER, weather: FAKE_WEATHER };
+const addrs = { attacker: FAKE_ATTACKER, payee: FAKE_PAYEE };
 const built: CarSpec = { kind: 'built', name: 'Naive', color: '#f5c400', persona: 'eager to help', model: 'claude-haiku-4-5-20251001' };
 const webhook: CarSpec = { kind: 'webhook', name: 'Hook', color: '#3ddc97', endpoint: 'https://agent.example.com/hook' };
 
@@ -52,13 +52,13 @@ function decodedBlocks(msg: string, index: number): { from: string; text: string
 const script: Script = {
   plan: ({ ownerRequest, mandatePayees }) => {
     const ens = mandatePayees.find((p) => ownerRequest.includes(p));
-    if (ens && /\bbuy\b/i.test(ownerRequest)) {
+    if (ens && /\b(buy|reserve)\b/i.test(ownerRequest)) {
       const maxUsd = Number(/\$(\d+(?:\.\d+)?)/.exec(ownerRequest)?.[1] ?? 'NaN');
       return {
         note: `buy from ${ens}`,
         steps: [
           { op: 'fetch_quote', payee: ens, ref: 'q', kind: null, amount: null, maxUsd: null, memo: null, reason: null },
-          { op: 'pay', payee: ens, ref: null, kind: null, amount: '$q.amount', maxUsd, memo: 'weather report', reason: null },
+          { op: 'pay', payee: ens, ref: null, kind: null, amount: '$q.amount', maxUsd, memo: 'GPU inference', reason: null },
         ],
       };
     }
@@ -73,7 +73,7 @@ const script: Script = {
       if (it.kind === 'http402') {
         const body = JSON.parse(it.text.slice(it.text.indexOf('{'), it.text.lastIndexOf('}') + 1)) as { accepts: { payTo: string; maxAmountRequired: string; resource: string }[] };
         const a = body.accepts[0]!;
-        quotes.push({ itemIndex: i, from: 'weather.naap.eth', payTo: a.payTo, amountUsd: Number(a.maxAmountRequired) / 1e6, token: 'USDC', resource: a.resource });
+        quotes.push({ itemIndex: i, from: 'compute.naap.eth', payTo: a.payTo, amountUsd: Number(a.maxAmountRequired) / 1e6, token: 'USDC', resource: a.resource });
         continue;
       }
       // Attack instructions exist only inside the encoded run: take them from Sekisho's decoded block.

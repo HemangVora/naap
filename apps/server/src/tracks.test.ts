@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AddressInfo } from 'node:net';
 import type { ArenaEvent, BarrierResult, RunDeps, TrackSpec } from '@crumple/core';
 import {
-  DEFAULT_TRACK_ID, FAKE_ATTACKER, FAKE_OWNER, FAKE_WEATHER, FakeChain, FakeJev, FakeJudge, FakeMandateSource, FakeRatingWriter,
+  DEFAULT_TRACK_ID, FAKE_ATTACKER, FAKE_OWNER, FAKE_PAYEE, FakeChain, FakeJev, FakeJudge, FakeMandateSource, FakeRatingWriter,
   FakeScreener, FakeSekisho, FakeSigner, FakeStepUp, FakeTripwire, GullibleDriver,
 } from '@crumple/core';
 import { runCar } from '@crumple/course';
@@ -25,7 +25,7 @@ function fakeWiring(): Wiring {
     deps,
     integrations: { llm: false, jev: false, intercepta: false, world: false, ens: false, fork: false },
     ownerAddress: FAKE_OWNER,
-    runCar: (car, spec, d, track) => runCar(car, spec, d, { attacker: FAKE_ATTACKER, weather: FAKE_WEATHER }, track),
+    runCar: (car, spec, d, track) => runCar(car, spec, d, { attacker: FAKE_ATTACKER, payee: FAKE_PAYEE }, track),
   };
 }
 

@@ -6,7 +6,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { ArenaEvent, BarrierResult, CarPublic, Rating, RunDeps } from '@crumple/core';
 import {
-  BARRIER_ORDER, FAKE_ATTACKER, FAKE_OWNER, FAKE_WEATHER, FakeChain, FakeJev, FakeJudge, FakeMandateSource, FakeRatingWriter,
+  BARRIER_ORDER, FAKE_ATTACKER, FAKE_OWNER, FAKE_PAYEE, FakeChain, FakeJev, FakeJudge, FakeMandateSource, FakeRatingWriter,
   FakeScreener, FakeSekisho, FakeSigner, FakeStepUp, FakeTripwire,
 } from '@crumple/core';
 import { driverFor, runCar } from '@crumple/course';
@@ -26,7 +26,7 @@ function fakeWiring(): Wiring {
     deps,
     integrations: { llm: false, jev: false, intercepta: false, world: false, ens: false, fork: false },
     ownerAddress: FAKE_OWNER,
-    runCar: (car, spec, d, track) => runCar(car, spec, d, { attacker: FAKE_ATTACKER, weather: FAKE_WEATHER }, track),
+    runCar: (car, spec, d, track) => runCar(car, spec, d, { attacker: FAKE_ATTACKER, payee: FAKE_PAYEE }, track),
   };
 }
 
@@ -117,7 +117,7 @@ describe('MCP endpoint — a connected agent drives a car end to end', () => {
         // the naive agent: trusts the 402 body and pays whoever it names
         const payTo = n.content!.map((c) => c.text).join('\n').match(/"payTo":\s*"(0x[0-9a-fA-F]{40})"/)![1]!;
         expect(payTo.toLowerCase()).toBe(FAKE_ATTACKER.toLowerCase());
-        const paid = json<{ recorded: number }>(await client.callTool({ name: 'naap_pay', arguments: { payTo, amountUsd: 1.99, memo: 'weather' } }));
+        const paid = json<{ recorded: number }>(await client.callTool({ name: 'naap_pay', arguments: { payTo, amountUsd: 1.99, memo: 'gpu hour' } }));
         expect(paid.recorded).toBe(1);
         // an invalid pay is reported back to the agent, not swallowed
         const bad = await client.callTool({ name: 'naap_pay', arguments: { payTo: 'nope', amountUsd: 1 } });

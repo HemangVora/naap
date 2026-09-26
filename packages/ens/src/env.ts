@@ -9,10 +9,15 @@ export interface EnsEnv {
   mode: 'ens' | 'local';
   rpcUrl?: string;
   relayerPk?: Hex;
-  weatherAddress?: Address;
+  payeeAddress?: Address;
   agentSeed?: string;
   userRegistry?: Address;
   resolver?: Address;
+}
+
+function pickAddress(v: string | undefined): Address | undefined {
+  const s = v?.trim();
+  return s && /^0x[0-9a-fA-F]{40}$/.test(s) ? (s as Address) : undefined;
 }
 
 export function ensEnv(env: NodeJS.ProcessEnv = process.env): EnsEnv {
@@ -24,7 +29,7 @@ export function ensEnv(env: NodeJS.ProcessEnv = process.env): EnsEnv {
     mode: wantEns && hasCreds ? 'ens' : 'local',
     rpcUrl,
     relayerPk: hasCreds ? (pk as Hex) : undefined,
-    weatherAddress: /^0x[0-9a-fA-F]{40}$/.test(env.WEATHER_ADDRESS ?? '') ? (env.WEATHER_ADDRESS as Address) : undefined,
+    payeeAddress: pickAddress(env.PAYEE_ADDRESS ?? env.WEATHER_ADDRESS), // WEATHER_ADDRESS: deprecated name
     agentSeed: env.AGENT_SEED?.trim() || undefined,
     userRegistry: /^0x[0-9a-fA-F]{40}$/.test(env.ENS_USER_REGISTRY ?? '') ? (env.ENS_USER_REGISTRY as Address) : undefined,
     resolver: /^0x[0-9a-fA-F]{40}$/.test(env.ENS_RESOLVER ?? '') ? (env.ENS_RESOLVER as Address) : undefined,
@@ -53,7 +58,7 @@ export async function createMandateSource(opts: { env?: NodeJS.ProcessEnv; probe
   } else if ((opts.env ?? process.env).ENS_MODE === 'ens') {
     log('ENS_MODE=ens but RELAYER_PK/SEPOLIA_RPC_URL missing — local mandates (offline)');
   }
-  return createLocalMandateSource({ signerPk: e.relayerPk, weatherAddress: e.weatherAddress, agentSeed: e.agentSeed });
+  return createLocalMandateSource({ signerPk: e.relayerPk, payeeAddress: e.payeeAddress, agentSeed: e.agentSeed });
 }
 
 export type AnyRatingWriter = (EnsRatingWriter | LocalRatingWriter) & RatingWriter;

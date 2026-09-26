@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Observation } from '@crumple/core';
-import { FAKE_ATTACKER, FAKE_WEATHER } from '@crumple/core';
+import { FAKE_ATTACKER, FAKE_PAYEE } from '@crumple/core';
 import { McpDriver } from './mcp.js';
 import { MAX_ACTIONS } from './sanitize.js';
 
@@ -23,10 +23,10 @@ describe('McpDriver — once per barrier across both lanes', () => {
     expect(next.ownerRequest).toBe('owner asks at legit');
     expect(next.content).toHaveLength(1);
 
-    d.pay({ payTo: FAKE_WEATHER, amountUsd: 1 });
+    d.pay({ payTo: FAKE_PAYEE, amountUsd: 1 });
     const done = d.done('bought it');
     expect(done.actions).toEqual([
-      { type: 'pay', args: { payTo: FAKE_WEATHER, amountUsd: 1, token: 'USDC', memo: '' } },
+      { type: 'pay', args: { payTo: FAKE_PAYEE, amountUsd: 1, token: 'USDC', memo: '' } },
       { type: 'reply', text: 'bought it' },
     ]);
     const [a, b] = await Promise.all([bare, airbag]);
@@ -116,19 +116,19 @@ describe('McpDriver — timeout, waiting and finish', () => {
 describe('McpDriver — pay validation', () => {
   it('rejects pay/done with no open barrier, bad payees, bad amounts, and caps the count', async () => {
     const d = new McpDriver({ timeoutMs: 5_000 });
-    expect(() => d.pay({ payTo: FAKE_WEATHER, amountUsd: 1 })).toThrow(/naap_next_barrier first/);
+    expect(() => d.pay({ payTo: FAKE_PAYEE, amountUsd: 1 })).toThrow(/naap_next_barrier first/);
     expect(() => d.done()).toThrow(/naap_next_barrier first/);
     d.act(obs('legit'));
     await d.nextBarrier(20);
     expect(() => d.pay({ payTo: 'not-an-address', amountUsd: 1 })).toThrow(/Invalid payment/);
-    expect(() => d.pay({ payTo: FAKE_WEATHER, amountUsd: -1 })).toThrow(/Invalid payment/);
-    expect(() => d.pay({ payTo: FAKE_WEATHER, amountUsd: 'abc' })).toThrow(/Invalid payment/);
+    expect(() => d.pay({ payTo: FAKE_PAYEE, amountUsd: -1 })).toThrow(/Invalid payment/);
+    expect(() => d.pay({ payTo: FAKE_PAYEE, amountUsd: 'abc' })).toThrow(/Invalid payment/);
     expect(() => d.pay(null)).toThrow(/Invalid payment/);
     // ENS names are lower-cased, amounts rounded to cents, token defaults to USDC, memo capped
-    const r = d.pay({ payTo: 'Weather.NaAP.ETH', amountUsd: 1.239, memo: 'x'.repeat(300) });
-    expect(r.action).toEqual({ type: 'pay', args: { payTo: 'weather.naap.eth', amountUsd: 1.24, token: 'USDC', memo: 'x'.repeat(200) } });
-    for (let i = 1; i < MAX_ACTIONS; i++) d.pay({ payTo: FAKE_WEATHER, amountUsd: 1 });
-    expect(() => d.pay({ payTo: FAKE_WEATHER, amountUsd: 1 })).toThrow(/At most/);
+    const r = d.pay({ payTo: 'Compute.NaAP.ETH', amountUsd: 1.239, memo: 'x'.repeat(300) });
+    expect(r.action).toEqual({ type: 'pay', args: { payTo: 'compute.naap.eth', amountUsd: 1.24, token: 'USDC', memo: 'x'.repeat(200) } });
+    for (let i = 1; i < MAX_ACTIONS; i++) d.pay({ payTo: FAKE_PAYEE, amountUsd: 1 });
+    expect(() => d.pay({ payTo: FAKE_PAYEE, amountUsd: 1 })).toThrow(/At most/);
     expect(d.done().actions).toHaveLength(MAX_ACTIONS);
   });
 });

@@ -24,7 +24,7 @@ import {
 } from './index.js';
 
 const buyer = privateKeyToAccount('0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d'); // anvil #1
-const weather = '0x1111111111111111111111111111111111111111' as const;
+const payee = '0x1111111111111111111111111111111111111111' as const;
 const attacker = '0xbad0000000000000000000000000000000000bad' as const;
 
 describe('usdc constants', () => {
@@ -38,7 +38,7 @@ describe('usdc constants', () => {
   it('balance slot = keccak256(abi.encode(holder, 9))', () => {
     const holder = '0x000000000000000000000000000000000000dEaD';
     expect(usdcBalanceSlot(holder)).toBe(keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [holder, 9n])));
-    expect(usdcBalanceSlot(holder)).not.toBe(usdcBalanceSlot(weather));
+    expect(usdcBalanceSlot(holder)).not.toBe(usdcBalanceSlot(payee));
   });
   it('usd ↔ units', () => {
     expect(usdToUnits(500)).toBe(500_000_000n);
@@ -51,7 +51,7 @@ describe('usdc constants', () => {
 
 describe('eip3009', () => {
   it('signature recovers the signer and splits into v/r/s', async () => {
-    const auth = await signAuthorization(buyer, { to: weather, value: 1_000_000n });
+    const auth = await signAuthorization(buyer, { to: payee, value: 1_000_000n });
     expect(auth.from).toBe(buyer.address);
     expect(auth.token).toBe(USDC_ADDRESS);
     expect(await recoverAuthorizationSigner(authFields(auth), auth.signature)).toBe(buyer.address);
@@ -61,7 +61,7 @@ describe('eip3009', () => {
     expect(s).toMatch(/^0x[0-9a-f]{64}$/);
   });
   it('digest changes with the domain (a fake 402 domain does not produce a valid USDC signature)', async () => {
-    const auth = await signAuthorization(buyer, { to: weather, value: 1n, nonce: `0x${'11'.repeat(32)}`, validBefore: 1n });
+    const auth = await signAuthorization(buyer, { to: payee, value: 1n, nonce: `0x${'11'.repeat(32)}`, validBefore: 1n });
     const f = authFields(auth);
     expect(authorizationDigest(f)).not.toBe(authorizationDigest(f, { ...USDC_DOMAIN, version: '1' }));
     const wrong = await recoverAuthorizationSigner(f, auth.signature, { ...USDC_DOMAIN, chainId: 1 });
@@ -70,7 +70,7 @@ describe('eip3009', () => {
 });
 
 describe('x402', () => {
-  const req = paymentRequirements({ payTo: weather, priceUsd: 1, resource: 'https://weather.naap.eth/report', description: "Today's Tokyo weather report" });
+  const req = paymentRequirements({ payTo: payee, priceUsd: 1, resource: 'https://compute.naap.eth/v1/inference/1h', description: "1 hour of GPU inference" });
 
   it('produces a realistic exact-scheme 402 body for Base', () => {
     const body = paymentRequiredBody(req);
@@ -80,7 +80,7 @@ describe('x402', () => {
       scheme: 'exact',
       network: 'base',
       maxAmountRequired: '1000000',
-      payTo: weather,
+      payTo: payee,
       asset: USDC_ADDRESS,
       extra: { name: 'USD Coin', version: '2' },
       maxTimeoutSeconds: 60,
@@ -93,7 +93,7 @@ describe('x402', () => {
   it('roundtrip: sign with a local key → header → verify', async () => {
     const header = await createXPayment(buyer, req);
     const decoded = decodeXPayment(header);
-    expect(decoded.payload.authorization.to).toBe(weather);
+    expect(decoded.payload.authorization.to).toBe(payee);
     const res = await verifyPayment(header, req);
     expect(res.valid).toBe(true);
     if (res.valid) {
@@ -120,10 +120,10 @@ describe('x402', () => {
     const stale = await createXPayment(buyer, req, { nowSec: now - 3600 });
     expect((await verifyPayment(stale, req)) as { reason?: string }).toMatchObject({ valid: false, reason: expect.stringMatching(/expired/) });
 
-    const future = await signAuthorization(buyer, { to: weather, value: 1_000_000n, validAfter: BigInt(now + 1000) });
+    const future = await signAuthorization(buyer, { to: payee, value: 1_000_000n, validAfter: BigInt(now + 1000) });
     expect((await verifyPayment(paymentPayloadFromAuth(future), req)) as { reason?: string }).toMatchObject({ valid: false, reason: expect.stringMatching(/not yet valid/) });
 
-    const auth = await signAuthorization(buyer, { to: weather, value: 1_000_000n });
+    const auth = await signAuthorization(buyer, { to: payee, value: 1_000_000n });
     const forged = paymentPayloadFromAuth({ ...auth, from: attacker });
     const res = await verifyPayment(forged, req);
     expect(res.valid).toBe(false);
@@ -135,7 +135,7 @@ describe('x402', () => {
   });
 
   it('accepts overpayment (exact scheme: value ≥ maxAmountRequired)', async () => {
-    const auth = await signAuthorization(buyer, { to: weather, value: 2_000_000n });
+    const auth = await signAuthorization(buyer, { to: payee, value: 2_000_000n });
     const res = await verifyPayment(paymentPayloadFromAuth(auth), req);
     expect(res.valid).toBe(true);
   });

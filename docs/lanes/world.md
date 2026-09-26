@@ -44,7 +44,7 @@ Verified live on 2026-09-26 19:40 JST: discovery document, JWKS (one RS256 key, 
 
 ## Integration debrief (draft for the prize submission — fill in the two blanks after the live run)
 
-**What we built.** Sekisho refuses any payment over the owner's mandate cap. For the owner's car, the over-limit barrier ($40 forecast, cap $5) triggers a World ID device grant: the big screen shows `verification_uri_complete` as a QR + user code, the presenter proves with World App, the backend validates the ID token (RS256/JWKS, iss, aud, exp, `auth_time` ≥ request time) and only then signs the EIP-3009 transfer. Audience cars cannot approve: the gate times out in 60 s and the payment does not happen. Deny in World App → `DENIED`, payment does not happen. Walk away → `EXPIRED`, payment does not happen.
+**What we built.** Sekisho refuses any payment over the owner's mandate cap. For the owner's car, the over-limit barrier ($40 GPU block, cap $5) triggers a World ID device grant: the big screen shows `verification_uri_complete` as a QR + user code, the presenter proves with World App, the backend validates the ID token (RS256/JWKS, iss, aud, exp, `auth_time` ≥ request time) and only then signs the EIP-3009 transfer. Audience cars cannot approve: the gate times out in 60 s and the payment does not happen. Deny in World App → `DENIED`, payment does not happen. Walk away → `EXPIRED`, payment does not happen.
 
 **Time to first success:** ___ min from portal sign-in to first validated `APPROVED` (`pnpm --filter @crumple/world try`). Code against the docs + mocked tests took ~1 h before any credentials existed, because the guides are served unauthenticated from `/mcp` and the discovery document is public.
 
@@ -101,6 +101,15 @@ Spec: `docs/design/world-v3.md`. Route `/world` (`?mock=1` multi-track mock, `?t
 
 Headed Chromium, 1600×900, MacBook: 119–123 fps (vsync cap) with 6 cars on 5 tracks in the mock, 350–820 draw calls. Screens: `apps/web/screens/world-*.png`.
 
+## v4 nav + audio lane (`docs/design/world-v4.md`)
+
+- `world/nav.ts` — per-visitor Minecraft-style walk: "Click to walk in" → pointer lock, mouse look (pitch clamped ±87°), WASD, Shift sprint, Space jump, F fly (Space/C up/down, touching down lands), R respawn, gravity onto the terrain (BVH ray down against ground meshes, fallback y = 0), AABB collisions (props, walls, rails, cars; step-up 0.6 m, stand on tops), crosshair, E / click rides along with the car under the crosshair (chase cam, mouse orbits it), E hops out beside it. V cycles walk → orbit (v3 camera) → auto-tour. Esc frees the mouse ("click to resume"). Spawn: a steel viewing deck (9 m, yellow rails, stair at the back) at the run-up of NaAP Standard facing down the road. Emits `enter-biome` when the nearest obstacle segment under the player changes. Touch: left joystick, right drag-look, JUMP / FLY / RIDE / VIEW buttons. If pointer lock is refused the walk falls back to drag-look. Auto-tour still starts after 20 s idle, never while the pointer is locked. Debug: `window.__nav`.
+- `world/minimap.ts` — the player is a yellow arrow with a view cone (walk); the orbit footprint shows in overview views; clicking the map while walking teleports there.
+- `world/audio.ts` — WebAudio built on the first gesture; `THREE.AudioListener` on the nav camera; HUD "SOUND ON/OFF" toggle + `M`, persisted in `localStorage['naap.world.muted']`. Positional PannerNodes: engine hum per car (saw + square through a resonant low-pass, pitch and cutoff ∝ speed, max 8 voices, nearest wins), crash by kind (wall crunch; cliff tumble + rockslide; lava impact + roar + sizzle; water plunge + splash + bubbles; rockfall rumble), tyre screech on `aeb`, gate chime / buzzer / tick, thunder (delayed by distance), `splash`, `sizzle`, report ding + card flip. Ambient beds per biome crossfade on `enter-biome` (meadow wind + birds, storm wind + rain + drops, caldera rumble + crackle + lava bubbles, river rush, canyon whistle + pebbles), plus footsteps (grass / hard) and a landing thud. Samples that fail to decode fall back to synthesis. Debug: `__audio.summary()`, `__audio.test('crash-lava' | 'aeb' | 'gate-open' | 'thunder' | …)`.
+- Screens: `apps/web/screens/v4-nav-*.png`.
+
 ## Credits
+
+Sounds: **Kenney "Impact Sounds", "Sci-fi Sounds", "Interface Sounds", "RPG Audio"** (www.kenney.nl), CC0 1.0 — 30 .ogg files (576 KB) in `apps/web/public/audio/kenney/` (licence alongside). Engines, screech, splash, sizzle, thunder and all ambience are synthesised.
 
 Car bodies: **Kenney "Car Kit"** (www.kenney.nl), CC0 1.0 — `apps/web/public/models/kenney/` (`sedan`, `sedan-sports`, `hatchback-sports`, `suv` + `Textures/colormap.png`, licence file alongside).

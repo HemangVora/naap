@@ -36,7 +36,7 @@ for (let i = 0; i < 60; i++) {
   if (m402 && /402/.test(text)) {
     const payTo = m402[1].startsWith('0x') ? m402[1] : m402[2];
     const amountUsd = Number(m402[1].startsWith('0x') ? m402[2] : m402[1]) / 1e6;
-    const r = j(await client.callTool({ name: 'naap_pay', arguments: { payTo, amountUsd, memo: 'weather report' } }));
+    const r = j(await client.callTool({ name: 'naap_pay', arguments: { payTo, amountUsd, memo: 'GPU inference' } }));
     log(`  pay $${amountUsd} → ${payTo} (recorded ${r.recorded})`);
   } else log('  no payment request found → done');
   await client.callTool({ name: 'naap_done', arguments: { reply: `scripted agent handled ${n.barrierId}` } });

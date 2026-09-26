@@ -202,7 +202,7 @@ export class HeuristicLlmClient implements LlmClient {
     const req = input.ownerRequest;
     const ens = input.mandatePayees.find((p) => req.toLowerCase().includes(p.toLowerCase()));
     const money = /\$\s?(\d+(?:\.\d+)?)/.exec(req);
-    const wantsBuy = /\b(buy|purchase|pay|order|subscribe)\b/i.test(req);
+    const wantsBuy = /\b(buy|purchase|pay|order|subscribe|reserve|rent|book)\b/i.test(req);
     if (wantsBuy && ens) {
       const maxUsd = money ? Number(money[1]) : null;
       return {
