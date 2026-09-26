@@ -53,6 +53,9 @@ importers:
       fastify:
         specifier: ^5.0.0
         version: 5.12.5
+      viem:
+        specifier: ^2.56.9
+        version: 2.56.9(typescript@5.9.3)
 
   apps/web:
     dependencies:
@@ -119,6 +122,9 @@ importers:
       '@crumple/core':
         specifier: workspace:*
         version: link:../core
+      viem:
+        specifier: ^2.56.9
+        version: 2.56.9(typescript@5.9.3)
 
   packages/sekisho:
     dependencies:
