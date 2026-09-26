@@ -54,3 +54,14 @@ export const DEFAULT_TRACK: TrackSpec = {
 
 /** Track builder limits (POST /api/tracks). */
 export const TRACK_LIMITS = { nameMax: 32, authorMax: 24, minObstacles: 1, maxObstacles: 8, maxAmountUsd: 1000 } as const;
+
+/** Custom incidents (docs/superpowers/specs/2026-09-27-custom-incidents-design.md). */
+export const INCIDENT_LIMITS = {
+  titleMax: 48, storyMax: 200, authorMax: 24, ownerRequestMax: 240, sourceMax: 80, textMax: 600, descriptionMax: 120,
+  promptMax: 600, minItems: 1, maxItems: 3, attackMinUsd: 1, attackMaxUsd: 500, legitMinUsd: 0.1, legitMaxUsd: 2, maxIncidents: 500,
+} as const;
+
+/** Text records on inc-<id>.naap.eth. */
+export const INCIDENT_ENS_KEYS = {
+  title: 'naap.incident.title', author: 'naap.incident.author', cls: 'naap.incident.class', hash: 'naap.incident.hash', url: 'naap.incident.url',
+} as const;

@@ -121,6 +121,42 @@ export interface TrackObstacle {
   obfuscation?: Obfuscation;
   /** Attack or purchase amount in USD (freysa prize, over-limit price, x402 price). Defaults per type. */
   amountUsd?: number;
+  /** A published custom incident (docs/superpowers/specs/2026-09-27-custom-incidents-design.md). */
+  incidentId?: string;
+  /** Snapshot embedded by the SERVER when the track is saved; any client-sent value is dropped. */
+  custom?: CustomIncident;
+}
+
+export type IncidentClass = 'attack' | 'legit';
+
+export interface IncidentItem {
+  kind: 'tweet' | 'web' | 'http402' | 'agent' | 'email';
+  source: string;
+  text: string;
+  /** Attack only: the one item carrying the {ATTACKER} instruction. */
+  payload?: boolean;
+}
+
+/** A visitor-authored incident. Its barrier borrows a preset id (the skin) for scoring, stars and the 3D world. */
+export interface CustomIncident {
+  /** `<slug>-<4 random>`; the ENS label is `inc-<id>`. */
+  id: string;
+  title: string;
+  story: string;
+  author: string;
+  cls: IncidentClass;
+  /** Derived by the server (skinFor), never client-chosen. */
+  skin: BarrierId;
+  /** Attack: AI-written, trusted as the owner's words. Legit: unused (the preset request is used at run time). */
+  ownerRequest: string;
+  content: IncidentItem[];
+  /** Attack: amount the attacker asks for (1–500). Legit: the toll price (0.1–2). */
+  amountUsd: number;
+  ensName?: string;
+  ensTx?: string;
+  /** Bare-lane CRASHes this incident caused. */
+  fooled: number;
+  createdAt: number;
 }
 
 export interface TrackSpec {
@@ -385,6 +421,10 @@ export interface BarrierResult {
   reason: string;
   judge?: JudgeResult;
   txHash?: Hex;
+  /** Custom incident id, when this step was a custom incident. */
+  incidentId?: string;
+  /** Custom incident title (labels). */
+  title?: string;
 }
 
 export interface Rating {
@@ -452,6 +492,8 @@ export interface Integrations {
 export type ArenaEvent =
   | { t: 'hello'; cars: CarPublic[]; queue: string[]; integrations: Integrations; tracks: TrackSpec[]; stats: Stats }
   | { t: 'track.created'; track: TrackSpec }
+  | { t: 'incident.created'; incident: CustomIncident }
+  | { t: 'incident.onchain'; id: string; ensName: string; txHash: string }
   | { t: 'report'; carId: string; report: RunReport }
   | { t: 'stats'; stats: Stats }
   | { t: 'car.joined'; car: CarPublic }
