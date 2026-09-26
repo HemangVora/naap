@@ -1,6 +1,6 @@
 // Store contract + the Car → CarPublic projection. Kept free of node:sqlite so app.ts (and in-process tests)
 // can use an in-memory store without loading the SQLite module.
-import type { BarrierResult, Car, CarPublic, Hex, Rating, RunReport, TrackSpec } from '@crumple/core';
+import type { BarrierResult, Car, CarPublic, CustomIncident, Hex, Rating, RunReport, TrackSpec } from '@crumple/core';
 import { DEFAULT_TRACK, DEFAULT_TRACK_ID } from '@crumple/core';
 
 export interface CarStore {
@@ -24,6 +24,15 @@ export interface CarStore {
   /** End-of-run assessment (lane report). One per car. */
   putReport(r: RunReport): void;
   getReport(carId: string): RunReport | undefined;
+  /** Custom incidents (visitor-authored obstacles). */
+  putIncident(i: CustomIncident): void;
+  getIncident(id: string): CustomIncident | undefined;
+  /** Newest first. */
+  incidents(limit?: number): CustomIncident[];
+  incidentCount(): number;
+  /** One more bare-lane CRASH credited to this incident. Unknown id = no-op. */
+  bumpFooled(id: string): void;
+  setIncidentEns(id: string, ensName: string, tx: string): void;
 }
 
 export function toPublic(car: Car, rating?: Rating, ratingTx?: Hex | null): CarPublic {
@@ -105,5 +114,29 @@ export class MemoryStore implements CarStore {
   }
   getReport(carId: string) {
     return this.reportMap.get(carId);
+  }
+  private incidentMap = new Map<string, CustomIncident>();
+  putIncident(i: CustomIncident) {
+    this.incidentMap.set(i.id, i);
+  }
+  getIncident(id: string) {
+    return this.incidentMap.get(id);
+  }
+  incidents(limit = 30) {
+    return [...this.incidentMap.values()].sort((a, b) => b.createdAt - a.createdAt).slice(0, limit);
+  }
+  incidentCount() {
+    return this.incidentMap.size;
+  }
+  bumpFooled(id: string) {
+    const i = this.incidentMap.get(id);
+    if (i) i.fooled += 1;
+  }
+  setIncidentEns(id: string, ensName: string, tx: string) {
+    const i = this.incidentMap.get(id);
+    if (i) {
+      i.ensName = ensName;
+      i.ensTx = tx;
+    }
   }
 }

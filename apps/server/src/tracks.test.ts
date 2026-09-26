@@ -1,33 +1,20 @@
 // Tracks + stats on the server, in process: buildApp() on core fakes + the real course engine. No network, no keys.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AddressInfo } from 'node:net';
-import type { ArenaEvent, BarrierResult, RunDeps, TrackSpec } from '@crumple/core';
-import {
-  DEFAULT_TRACK_ID, FAKE_ATTACKER, FAKE_OWNER, FAKE_PAYEE, FakeChain, FakeJev, FakeJudge, FakeMandateSource, FakeRatingWriter,
-  FakeScreener, FakeSekisho, FakeSigner, FakeStepUp, FakeTripwire, GullibleDriver,
-} from '@crumple/core';
-import { runCar } from '@crumple/course';
+import type { ArenaEvent, BarrierResult, TrackSpec } from '@crumple/core';
+import { DEFAULT_TRACK_ID } from '@crumple/core';
 import { buildApp } from './app.js';
 import { MemoryStore } from './public.js';
 import { computeStats } from './stats.js';
-import { validateTrack } from './validate.js';
-import type { Wiring } from './wiring.js';
+import { fakeWiring } from './test-wiring.js';
+import { carId, validateTrack } from './validate.js';
 
-function fakeWiring(): Wiring {
-  const mandates = new FakeMandateSource();
-  const jev = new FakeJev();
-  const deps: Omit<RunDeps, 'emit'> = {
-    mandates, ratings: new FakeRatingWriter(), screener: new FakeScreener(), stepUp: new FakeStepUp(true, 5), jev,
-    tripwire: new FakeTripwire(jev), judge: new FakeJudge(jev), chain: new FakeChain(), signer: new FakeSigner(), sekisho: new FakeSekisho(mandates),
-    driverFor: () => new GullibleDriver(),
-  };
-  return {
-    deps,
-    integrations: { llm: false, jev: false, intercepta: false, world: false, ens: false, fork: false },
-    ownerAddress: FAKE_OWNER,
-    runCar: (car, spec, d, track) => runCar(car, spec, d, { attacker: FAKE_ATTACKER, payee: FAKE_PAYEE }, track),
-  };
-}
+describe('carId', () => {
+  it('never produces an inc- prefix (reserved for incident ENS labels)', () => {
+    expect(carId('inc-thing')).not.toMatch(/^inc-/);
+    expect(carId('inc-thing')).toMatch(/^car-thing-[a-z0-9]{6}$/);
+  });
+});
 
 describe('validateTrack', () => {
   const ok = { name: 'Degen Gauntlet', author: 'zoni', obstacles: [{ type: 'freysa', obfuscation: 'base64', amountUsd: 99 }] };

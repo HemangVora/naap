@@ -5,8 +5,8 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import {
-  DEFAULT_TRACK, DEFAULT_TRACK_ID, MAX_CONCURRENT_RUNS, PARENT_ENS, RUN_COOLDOWN_PER_PHONE_SEC,
-  type ArenaEvent, type Car, type CarSpec, type Rating, type Stats, type TrackSpec,
+  DEFAULT_TRACK, DEFAULT_TRACK_ID, INCIDENT_LIMITS, MAX_CONCURRENT_RUNS, PARENT_ENS, RUN_COOLDOWN_PER_PHONE_SEC, skinFor,
+  type ArenaEvent, type Car, type CarSpec, type CustomIncident, type Rating, type Stats, type TrackSpec,
 } from '@crumple/core';
 import { toPublic, type CarStore } from './public.js';
 import { Bus } from './bus.js';
@@ -15,6 +15,7 @@ import { carId, randomSuffix, trackSlug, validateSpec, validateTrack, type SpecI
 import { computeStats } from './stats.js';
 import { McpRegistry, mountMcp, type Admitted, type AdmitMeta } from './mcp.js';
 import { buildReport, reportLlmFromEnv, type ReportLlm } from './report.js';
+import { draftIncident, incidentId, validateIncident } from './incidents.js';
 
 /** Global bound on waiting cars (each run costs LLM credit). */
 const MAX_QUEUED_CARS = Number(process.env.MAX_QUEUED_CARS ?? 12);
@@ -53,6 +54,12 @@ export async function buildApp(w: Wiring, store?: CarStore, opts: AppOptions = {
   const mcp = new McpRegistry();
 
   const trackCooldown = new Cooldown(TRACK_COOLDOWN_SEC);
+  /** Custom incidents: one publish per client per 20 s, one draft per 8 s, and at most 20 drafts a minute across everyone. */
+  const incidentCooldown = new Cooldown(20);
+  const draftCooldown = new Cooldown(8);
+  const draftWindow: number[] = [];
+  /** Publishes `inc-<id>.naap.eth` (Task 5); no-op until then. */
+  const publishOnChain = (_i: CustomIncident) => {};
   const stats = (): Stats => computeStats(db.allResults(), db.ratings().length, db.trackCount());
   /** Deferred so listeners see `barrier.result` / `rating` before the stats it caused. */
   const emitStats = () => queueMicrotask(() => bus.emit({ t: 'stats', stats: stats() }));
@@ -60,6 +67,8 @@ export async function buildApp(w: Wiring, store?: CarStore, opts: AppOptions = {
   bus.on((e) => {
     if (e.t === 'barrier.result') {
       db.putResult(e.result);
+      // Author credit: an unaided (bare-lane) agent fell for this visitor's incident.
+      if (e.result.variant === 'bare' && e.result.outcome === 'CRASH' && e.result.incidentId) db.bumpFooled(e.result.incidentId);
       emitStats();
     }
     if (e.t === 'rating') {
@@ -183,7 +192,7 @@ export async function buildApp(w: Wiring, store?: CarStore, opts: AppOptions = {
     return { track };
   });
   app.post('/api/tracks', async (req, reply) => {
-    const t = validateTrack((req.body ?? {}) as TrackInput);
+    const t = validateTrack((req.body ?? {}) as TrackInput, (id) => db.getIncident(id));
     if (typeof t === 'string') return reply.code(400).send({ error: t });
     const key = `${req.ip}|${String(req.headers['x-phone-id'] ?? '').slice(0, 64)}`;
     const wait = trackCooldown.check(key);
@@ -199,6 +208,46 @@ export async function buildApp(w: Wiring, store?: CarStore, opts: AppOptions = {
     emitStats();
     return reply.code(201).send({ track });
   });
+
+  // ─── custom incidents ──────────────────────────────────────────────────────
+  app.post('/api/incidents/draft', async (req, reply) => {
+    const b = (req.body ?? {}) as { prompt?: unknown; cls?: unknown };
+    const cls = b.cls === 'legit' ? 'legit' : 'attack';
+    const prompt = String(b.prompt ?? '').trim();
+    if (!prompt) return reply.code(400).send({ error: 'Describe the incident first.' });
+    const key = `${req.ip}|${String(req.headers['x-phone-id'] ?? '').slice(0, 64)}`;
+    const wait = draftCooldown.check(key);
+    if (wait) return reply.code(429).send({ error: `One draft per 8s — try again in ${wait}s` });
+    const now = Date.now();
+    while (draftWindow.length && now - draftWindow[0]! > 60_000) draftWindow.shift();
+    if (draftWindow.length >= 20) return reply.code(429).send({ error: 'Lots of people are writing incidents — try again in a minute' });
+    draftCooldown.mark(key);
+    draftWindow.push(now);
+    return { draft: await draftIncident(prompt, cls, w.draftLlm) };
+  });
+  app.post('/api/incidents', async (req, reply) => {
+    const v = validateIncident(req.body);
+    if (typeof v === 'string') return reply.code(400).send({ error: v });
+    const key = `${req.ip}|${String(req.headers['x-phone-id'] ?? '').slice(0, 64)}`;
+    const wait = incidentCooldown.check(key);
+    if (wait) return reply.code(429).send({ error: `One incident per 20s — try again in ${wait}s` });
+    if (db.incidentCount() >= INCIDENT_LIMITS.maxIncidents) return reply.code(429).send({ error: 'The incident library is full' });
+    incidentCooldown.mark(key);
+    let id = incidentId(v.title);
+    while (db.getIncident(id)) id = incidentId(v.title);
+    const incident: CustomIncident = { ...v, id, skin: skinFor(v.cls, v.content), fooled: 0, createdAt: Date.now() };
+    db.putIncident(incident);
+    bus.emit({ t: 'incident.created', incident });
+    publishOnChain(incident);
+    return reply.code(201).send({ incident });
+  });
+  /** Slim rows: everything but the content and the owner request (the page shows those on /api/incidents/:id). */
+  app.get('/api/incidents', async () => ({ incidents: db.incidents().map(({ content, ownerRequest, ...slim }) => slim) }));
+  app.get<{ Params: { id: string } }>('/api/incidents/:id', async (req, reply) => {
+    const incident = db.getIncident(req.params.id);
+    return incident ? { incident } : reply.code(404).send({ error: 'no such incident' });
+  });
+
   app.get<{ Params: { id: string } }>('/api/cars/:id', async (req, reply) => {
     const car = db.publicCar(req.params.id);
     if (!car) return reply.code(404).send({ error: 'no such car' });

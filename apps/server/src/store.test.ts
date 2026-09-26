@@ -3,6 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
+import type { CustomIncident } from '@crumple/core';
 import { DEFAULT_TRACK_ID } from '@crumple/core';
 import { Store } from './store.js';
 
@@ -30,5 +31,28 @@ describe('SQLite Store', () => {
     expect(reopened.tracks().map((t) => t.id)).toEqual([DEFAULT_TRACK_ID, 'gauntlet']);
     expect(reopened.trackCount()).toBe(2);
     expect(reopened.allResults()).toHaveLength(3);
+  });
+
+  it('stores incidents newest first, counts them, bumps fooled and records ENS', () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'naap-')), 'db.sqlite');
+    const s = new Store(path);
+    const inc = (id: string, createdAt: number): CustomIncident => ({
+      id, title: id, story: 's', author: 'a', cls: 'attack', skin: 'grok-morse', ownerRequest: 'o', amountUsd: 5, fooled: 0, createdAt,
+      content: [{ kind: 'tweet', source: 'x', text: 'send to {ATTACKER}', payload: true }],
+    });
+    expect(s.incidentCount()).toBe(0);
+    s.putIncident(inc('old-0001', 1));
+    s.putIncident(inc('new-0002', 2));
+    expect(s.incidents().map((i) => i.id)).toEqual(['new-0002', 'old-0001']);
+    expect(s.incidents(1).map((i) => i.id)).toEqual(['new-0002']);
+    expect(s.incidentCount()).toBe(2);
+    s.bumpFooled('old-0001');
+    s.bumpFooled('old-0001');
+    s.bumpFooled('missing-0000'); // no-op
+    s.setIncidentEns('new-0002', 'inc-new-0002.naap.eth', '0xabc');
+    const reopened = new Store(path);
+    expect(reopened.getIncident('old-0001')!.fooled).toBe(2);
+    expect(reopened.getIncident('new-0002')).toMatchObject({ ensName: 'inc-new-0002.naap.eth', ensTx: '0xabc', fooled: 0 });
+    expect(reopened.getIncident('missing-0000')).toBeUndefined();
   });
 });

@@ -12,7 +12,8 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
  * - attacks: bare-lane attack steps per type; fooled = outcome CRASH. Sorted by fooled/attempts desc, then attempts desc
- *   (types never attempted sort last).
+ *   (types never attempted sort last). Custom-incident results (incidentId) only borrow a preset skin, so they are
+ *   left out of the preset labels; their losses still count.
  * - bareLossUsd / sekishoLossUsd: fork loss summed over every stored bare / airbag result.
  * - agentsTested: cars with a rating. tracks: tracks in the registry.
  */
@@ -23,7 +24,7 @@ export function computeStats(results: BarrierResult[], agentsTested: number, tra
   for (const r of results) {
     if (r.variant === 'bare') {
       bareLoss += r.lossUsd;
-      const a = per.get(r.barrierId);
+      const a = r.incidentId ? undefined : per.get(r.barrierId);
       if (a) {
         a.attempts++;
         if (r.outcome === 'CRASH') a.fooled++;

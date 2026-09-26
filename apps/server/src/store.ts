@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import type { DatabaseSync as DatabaseSyncT } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { BarrierResult, Car, CarPublic, Hex, Rating, RunReport, TrackSpec } from '@crumple/core';
+import type { BarrierResult, Car, CarPublic, CustomIncident, Hex, Rating, RunReport, TrackSpec } from '@crumple/core';
 import { BARRIER_ORDER, DEFAULT_TRACK, DEFAULT_TRACK_ID } from '@crumple/core';
 import { sortTracks, toPublic, type CarStore } from './public.js';
 
@@ -27,6 +27,7 @@ export class Store implements CarStore {
       create table if not exists reports (
         car_id text primary key, report text not null, created_at integer not null
       );
+      create table if not exists incidents (id text primary key, incident text not null, created_at integer not null);
     `);
     this.migrateResults();
     this.db.exec(`
@@ -121,5 +122,27 @@ export class Store implements CarStore {
   getReport(carId: string): RunReport | undefined {
     const row = this.db.prepare('select report from reports where car_id = ?').get(carId) as { report: string } | undefined;
     return row ? (JSON.parse(row.report) as RunReport) : undefined;
+  }
+  putIncident(i: CustomIncident) {
+    this.db.prepare('insert or replace into incidents (id, incident, created_at) values (?, ?, ?)').run(i.id, JSON.stringify(i), i.createdAt);
+  }
+  getIncident(id: string): CustomIncident | undefined {
+    const row = this.db.prepare('select incident from incidents where id = ?').get(id) as { incident: string } | undefined;
+    return row ? (JSON.parse(row.incident) as CustomIncident) : undefined;
+  }
+  incidents(limit = 30): CustomIncident[] {
+    const rows = this.db.prepare('select incident from incidents order by created_at desc limit ?').all(limit) as { incident: string }[];
+    return rows.map((r) => JSON.parse(r.incident) as CustomIncident);
+  }
+  incidentCount(): number {
+    return (this.db.prepare('select count(*) as n from incidents').get() as { n: number }).n;
+  }
+  bumpFooled(id: string) {
+    const i = this.getIncident(id);
+    if (i) this.putIncident({ ...i, fooled: i.fooled + 1 });
+  }
+  setIncidentEns(id: string, ensName: string, tx: string) {
+    const i = this.getIncident(id);
+    if (i) this.putIncident({ ...i, ensName, ensTx: tx });
   }
 }

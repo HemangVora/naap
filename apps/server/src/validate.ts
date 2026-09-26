@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import type { BarrierId, BuiltModel, CarSpec, Obfuscation, TrackObstacle, TrackSpec } from '@crumple/core';
+import type { BarrierId, BuiltModel, CarSpec, CustomIncident, Obfuscation, TrackObstacle, TrackSpec } from '@crumple/core';
 import { TRACK_LIMITS } from '@crumple/core';
 
 const MODELS: BuiltModel[] = ['claude-haiku-4-5-20251001', 'claude-sonnet-5'];
@@ -50,9 +50,10 @@ export function validateSpec(body: SpecInput, ownerToken: string | undefined): C
   return spec;
 }
 
-/** ENS-label-safe id: slug of the name + 4 random chars. */
+/** ENS-label-safe id: slug of the name + 6 random chars. `inc-` is reserved for incident labels (inc-<id>.naap.eth). */
 export function carId(name: string): string {
-  const slug = name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 16) || 'car';
+  let slug = name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 16) || 'car';
+  if (slug.startsWith('inc-')) slug = `car-${slug.slice(4)}`;
   const suffix = [...randomBytes(6)].map((b) => 'abcdefghijklmnopqrstuvwxyz0123456789'[b % 36]).join('');
   return `${slug}-${suffix}`;
 }
@@ -73,8 +74,12 @@ export interface TrackInput {
 const clean = (v: unknown) =>
   String(v ?? '').replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim();
 
-/** Returns a clean track (without id/createdAt) or an error string. */
-export function validateTrack(body: TrackInput): Omit<TrackSpec, 'id' | 'createdAt'> | string {
+/**
+ * Returns a clean track (without id/createdAt) or an error string. An obstacle with `incidentId` is resolved through
+ * `lookup` and embedded as a server-side snapshot: its type is the incident's skin, and any client-sent `custom`,
+ * `type` or `amountUsd` on it is dropped.
+ */
+export function validateTrack(body: TrackInput, lookup?: (id: string) => CustomIncident | undefined): Omit<TrackSpec, 'id' | 'createdAt'> | string {
   if (!body || typeof body !== 'object') return 'body must be a JSON object';
   const name = clean(body.name);
   if (!name || name.length > TRACK_LIMITS.nameMax) return `name must be 1–${TRACK_LIMITS.nameMax} characters`;
@@ -87,6 +92,17 @@ export function validateTrack(body: TrackInput): Omit<TrackSpec, 'id' | 'created
   for (const [i, raw] of body.obstacles.entries()) {
     const o = (raw ?? {}) as Record<string, unknown>;
     if (typeof raw !== 'object' || raw === null) return `obstacle ${i + 1} must be an object`;
+    if (typeof o.incidentId === 'string') {
+      const inc = lookup?.(o.incidentId);
+      if (!inc) return `obstacle ${i + 1}: unknown incident`;
+      const ob: TrackObstacle = { type: inc.skin, incidentId: inc.id, custom: inc };
+      if (o.obfuscation !== undefined && o.obfuscation !== null) {
+        if (!OBFUSCATIONS.includes(o.obfuscation as Obfuscation)) return `obstacle ${i + 1}: obfuscation must be one of ${OBFUSCATIONS.join(', ')}`;
+        if (inc.cls === 'attack') ob.obfuscation = o.obfuscation as Obfuscation; // a legit toll has nothing to disguise
+      }
+      obstacles.push(ob);
+      continue;
+    }
     if (!BARRIER_TYPES.includes(o.type as BarrierId)) return `obstacle ${i + 1}: type must be one of ${BARRIER_TYPES.join(', ')}`;
     const ob: TrackObstacle = { type: o.type as BarrierId };
     if (o.obfuscation !== undefined && o.obfuscation !== null) {
