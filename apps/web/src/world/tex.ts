@@ -166,8 +166,12 @@ export function drawCounter(c: HTMLCanvasElement, label: string, fooled: number,
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.fillStyle = '#9a9890';
-  g.font = `600 30px ${MONO}`;
-  g.fillText(label.toUpperCase(), W / 2, 36);
+  // custom incident titles run to 48 chars; shrink the label until it fits the sign
+  const text = label.toUpperCase();
+  let size = 30;
+  g.font = `600 ${size}px ${MONO}`;
+  while (size > 16 && g.measureText(text).width > W - 24) g.font = `600 ${(size -= 2)}px ${MONO}`;
+  g.fillText(text, W / 2, 36);
   g.fillStyle = '#f2efe8';
   g.font = `800 64px ${DISPLAY}`;
   g.fillText(attempts ? `fooled ${fooled}/${attempts}` : 'untested', W / 2, 92);
