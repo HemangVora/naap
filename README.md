@@ -1,6 +1,6 @@
-# NaAP × Sekisho
+<p align="center"><img src="docs/naap-lockup-light.png" width="560" alt="NaAP: New Agent Assessment Programme. A crash-test dummy agent asleep at the wheel"/></p>
 
-<img src="apps/web/public/naap-logo.svg" width="96" align="right" alt="NaAP logo: a crash-test agent asleep at the wheel"/>
+# NaAP × Sekisho
 
 **NaAP (New Agent Assessment Programme) crash-tests AI agents' wallets live, like Euro NCAP for agents that fall asleep at the wheel.** Sekisho is the airbag: text an agent reads can't move its money. Only its owner can.
 
