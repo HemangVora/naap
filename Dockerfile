@@ -31,6 +31,7 @@ COPY packages/core/package.json packages/core/
 COPY packages/chain/package.json packages/chain/
 COPY packages/course/package.json packages/course/
 COPY packages/ens/package.json packages/ens/
+COPY packages/guard/package.json packages/guard/
 COPY packages/intercepta/package.json packages/intercepta/
 COPY packages/sekisho/package.json packages/sekisho/
 COPY packages/world/package.json packages/world/
