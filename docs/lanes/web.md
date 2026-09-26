@@ -48,7 +48,7 @@ Rewritten to `docs/design/arena-v2.md` after the owner's v1 feedback (crashes un
 - `AebSim` — constant approach, brake point solved so the car stops exactly `xStop` (0.8 m short of the GVT / 0.4 m short of the concrete for a bare near-miss), nose-dive pitch, dummy leans, tyre-smoke puffs + skid decals, then a suspension settle. The distance readout appears on stop.
 The main loop advances `sim.t`; the inset re-evaluates the same sim at a slow `t`, then `restore()` puts the real-time pose back.
 
-**Camera (`camera.ts`).** `DirectorCamera` = fixed high 3/4 direction; each frame it solves the distance so the bounding box of every unfinished lane (car ± station) fits the HUD-safe rect, eased with `1 − e^(−1.4·dt)`, principal point shifted into the safe rect via `setViewOffset`, trauma shake on top. Never cuts. `HighSpeedCam` = low front-3/4 rig 3–8 m from the lane on the side with no fixture between lens and car (−z for bare crashes, +z for sekisho stops).
+**Camera (`camera.ts`).** `DirectorCamera` = fixed 3/4 direction ≈30° down; each frame it solves the distance so the bounding box of every started, unfinished car plus the stations around the leader (−1…+1, not the whole track) fits the HUD-safe rect, eased with `1 − e^(−1.4·dt)`, principal point shifted into the safe rect via `setViewOffset`, trauma shake on top, and a 0.6 s eased 15 % push toward a crash (`punch`) while the barrier face flashes. Never cuts. Cars are drawn at `CAR_SCALE = 1.4` so they hold ≥ 90 px at gantry distance. `HighSpeedCam` = low front-3/4 rig 3–8 m from the lane on the side with no fixture between lens and car (−z for bare crashes, +z for sekisho stops).
 
 **Inset.** Scissor viewport bottom-left, 30 % width, second `render()` per frame (max 2 cameras). DOM burn-in: `HIGH-SPEED CAM · 1000 fps`, `t = +0.037 s`, car · barrier, `64 km/h · replay 1/12`. Crashes replay −0.07…+0.32 s at 1/12 (≈4.7 s); AEB stops replay at 1/3. Replays queue.
 
@@ -58,7 +58,7 @@ The main loop advances `sim.t`; the inset re-evaluates the same sim at a slow `t
 
 ## Screenshots (`apps/web/screens/`)
 
-`v2-crash-inset.png` (wide shot + high-speed inset mid-replay), `v2-crumpled-rebound.png` (rebound with bonnet peak, shards, dummy), `v2-aeb-stop.png` (AEB stop + "stopped 0.8 m short" readouts), `v2-stepup.png` (World card + countdown), `v2-wide-6cars.png` (director shot framing all lane pairs). v1 `arena-*.png` kept for comparison. Captured with gstack `browse --headed` (headless has no WebGL).
+`v2-crash-inset.png` (wide shot + high-speed inset mid-replay), `v2-crumpled-rebound.png` (rebound with bonnet peak, shards, dummy), `v2-aeb-stop.png` (AEB stop + "stopped 0.8 m short" readouts), `v2-stepup.png` (World card + countdown), `v2-wide-6cars.png` (director shot framing all lane pairs). Polish pass: `v3-two-cars.png` (tight framing with 2 cars), `v3-crash-punch.png` (push-in + honeycomb flash), `v3-aeb-stop.png`, `v3-wide-6cars.png` (1.4× cars, leader ±1 station framing, per-car start-line labels). v1 `arena-*.png` kept for comparison. Captured with gstack `browse --headed` (headless has no WebGL).
 
 ## Gaps / notes
 

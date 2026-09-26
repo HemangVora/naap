@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CarMesh, CRUSH_MAX, NOSE_X } from './car';
+import { CarMesh, CAR_SCALE, CRUSH_MAX, NOSE_X } from './car';
 import type { Barrier } from './fixtures';
 import { smokeTexture } from './textures';
 
@@ -58,7 +58,7 @@ export class CrashSim implements Sim {
     public laneZ: number,
     restore: () => void,
   ) {
-    this.focusX = contactX + NOSE_X + 0.2;
+    this.focusX = contactX + NOSE_X * CAR_SCALE + 0.2;
     this.restoreFn = restore;
     shardGeo ??= new THREE.BoxGeometry(0.16, 0.03, 0.12);
     shardMat ??= new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 });
@@ -108,7 +108,7 @@ export class CrashSim implements Sim {
     let dummy = 0;
     if (t < 0) x = this.contactX + V0 * t;
     else {
-      x = this.contactX + CRUSH_MAX * (c - this.c0);
+      x = this.contactX + CRUSH_MAX * CAR_SCALE * (c - this.c0);
       if (t > CRUSH_T) {
         const s = t - CRUSH_T;
         x -= 0.55 * (1 - Math.exp(-7 * s)) - 0.06 * Math.sin(18 * s) * Math.exp(-5 * s);
@@ -122,7 +122,7 @@ export class CrashSim implements Sim {
     this.barrier?.setDent(c);
 
     // shards: deterministic ballistic + floor slide
-    const noseX = this.contactX + NOSE_X;
+    const noseX = this.contactX + NOSE_X * CAR_SCALE;
     const z0 = this.laneZ;
     for (let i = 0; i < SHARDS; i++) {
       const o = i * 8;
@@ -208,7 +208,7 @@ export class AebSim implements Sim {
     this.tStop = v / a;
     this.t = (fromX - this.x0) / v; // negative: constant-speed approach first
     this.duration = this.tStop + 1.2;
-    this.focusX = xStop + NOSE_X;
+    this.focusX = xStop + NOSE_X * CAR_SCALE;
     this.kmh = Math.round(v * 3.6);
   }
   private v: number;

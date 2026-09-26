@@ -17,7 +17,10 @@ export interface SafeRect {
 export class DirectorCamera {
   camera = new THREE.PerspectiveCamera(40, 16 / 9, 0.5, 900);
   safe: SafeRect = { left: 210, right: 250, top: 110, bottom: 130 };
-  private dir = new THREE.Vector3(0.3, 0.84, 1.0).normalize(); // from target toward camera
+  private dir = new THREE.Vector3(0.3, 0.6, 1.0).normalize(); // ≈30° down, from target toward camera
+  private punchAt = new THREE.Vector3();
+  private punchUntil = 0;
+  private punchMs = 600;
   private center = new THREE.Vector3();
   private dist = 60;
   private targetCenter = new THREE.Vector3();
@@ -42,6 +45,13 @@ export class DirectorCamera {
 
   addTrauma(a: number) {
     this.trauma = Math.min(1, this.trauma + a);
+  }
+
+  /** Brief push (~15 %) toward a point, eased in and out; the fit still holds every lane. */
+  punch(at: THREE.Vector3, ms = 600) {
+    this.punchAt.copy(at);
+    this.punchMs = ms;
+    this.punchUntil = performance.now() + ms;
   }
 
   /** Fit a world-space box into the safe rect (sets the eased targets). */
@@ -85,7 +95,14 @@ export class DirectorCamera {
     const sy = Math.sin(this.t * 53 + 1.3) * shakeScale * 0.7 * s;
     const sz = Math.sin(this.t * 37 + 2.1) * shakeScale * 0.6 * s;
 
-    this.tmp.copy(this.dir).multiplyScalar(this.dist).add(this.center);
+    let dist = this.dist;
+    const left = this.punchUntil - performance.now();
+    if (left > 0) {
+      const e = Math.sin(Math.PI * (1 - left / this.punchMs)); // 0 → 1 → 0
+      this.center.lerp(this.punchAt, 0.15 * e * Math.min(1, wallDt * 30));
+      dist *= 1 - 0.15 * e;
+    }
+    this.tmp.copy(this.dir).multiplyScalar(dist).add(this.center);
     this.camera.position.set(this.tmp.x + sx, this.tmp.y + sy, this.tmp.z + sz);
     this.camera.lookAt(this.center);
     this.camera.rotation.z += Math.sin(this.t * 29) * 0.012 * s;

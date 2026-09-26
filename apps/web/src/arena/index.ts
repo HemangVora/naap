@@ -5,12 +5,12 @@ import { Store } from '../store';
 import { connectFeed, isMock } from '../feed';
 import { el } from '../dom';
 import { DirectorCamera, HighSpeedCam } from './camera';
-import { CarMesh, CRUSH_MAX, NOSE_X } from './car';
+import { CarMesh, CAR_SCALE, CRUSH_MAX, NOSE_X } from './car';
 import { Gate, Barrier, SoftTarget, skidMarks } from './fixtures';
 import { buildHall, STATION_X, START_X, END_X, MAX_SLOTS, laneZ, slotZ, LANE_DZ, HALL_BG } from './hall';
 import { SmokePool } from './particles';
 import { AebSim, CrashSim, type Sim } from './sims';
-import { bracketTexture } from './textures';
+import { bracketTexture, laneLabelTexture } from './textures';
 import { createHud } from '../hud';
 
 type Phase = 'parked' | 'approach' | 'creep' | 'waiting' | 'charging' | 'sim' | 'through' | 'exit';
@@ -38,6 +38,7 @@ interface CarActor {
   lanes: Record<Variant, LaneActor>;
   bracket: THREE.Mesh;
   bracketTex: THREE.CanvasTexture;
+  labels: THREE.Mesh[];
   skids: THREE.Mesh[];
   sims: Sim[];
 }
@@ -180,6 +181,12 @@ export function mountArena(root: HTMLElement) {
     a.bracket.removeFromParent();
     a.bracketTex.dispose();
     (a.bracket.material as THREE.Material).dispose();
+    for (const m of a.labels) {
+      m.removeFromParent();
+      m.geometry.dispose();
+      ((m.material as THREE.MeshBasicMaterial).map as THREE.Texture).dispose();
+      (m.material as THREE.Material).dispose();
+    }
     for (const g of sekGates[a.slot]) g.setState('idle');
     for (const t of targets[a.slot]) t?.raise(false);
     for (const f of bareFix[a.slot]) {
@@ -207,22 +214,31 @@ export function mountArena(root: HTMLElement) {
     };
     const bracketTex = bracketTexture(pub.name, pub.color);
     const bracket = new THREE.Mesh(new THREE.PlaneGeometry(4.8, 1.6), new THREE.MeshBasicMaterial({ map: bracketTex, transparent: true }));
-    bracket.position.set(START_X - 1.5, 1.7, slotZ(slot) - LANE_DZ / 2);
+    bracket.position.set(START_X - 1.5, 2.2, slotZ(slot) - LANE_DZ / 2);
     scene.add(bracket);
-    a = { id, slot, joinedAt: Date.now(), lanes: { bare: mk('bare'), airbag: mk('airbag') }, bracket, bracketTex, skids: [], sims: [] };
+    // lane labels once per car, large, on the floor behind the start position
+    const labels: THREE.Mesh[] = [];
+    for (const v of ['bare', 'airbag'] as const) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(13, 2.1), new THREE.MeshBasicMaterial({ map: laneLabelTexture(v === 'bare' ? 'BARE · NO PROTECTION' : 'SEKISHO · AIRBAG', v === 'bare' ? 'bare' : 'sekisho'), transparent: true, depthWrite: false }));
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(START_X - 16, 0.012, laneZ(slot, v));
+      scene.add(m);
+      labels.push(m);
+    }
+    a = { id, slot, joinedAt: Date.now(), lanes: { bare: mk('bare'), airbag: mk('airbag') }, bracket, bracketTex, labels, skids: [], sims: [] };
     actors.set(id, a);
     return a;
   }
 
-  function floater(text: string, pos: THREE.Vector3, tone: 'red' | 'green' | 'amber' | 'readout' = 'red', ms = 1500) {
+  function floater(text: string, pos: THREE.Vector3, tone: 'red' | 'green' | 'amber' | 'readout' = 'red', ms = 1100) {
     const node = el('div', { class: `floater ${tone === 'red' ? '' : tone}`, text });
     floatLayer.append(node);
     floaters.push({ node, pos: pos.clone(), until: performance.now() + ms });
   }
 
-  const lanePos = (l: LaneActor, dx = 0) => new THREE.Vector3(l.car.group.position.x + dx, 0.9, l.car.group.position.z);
+  const lanePos = (l: LaneActor, dx = 0) => new THREE.Vector3(l.car.group.position.x + dx, 3.4, l.car.group.position.z);
   const chipsFor = (blockedBy: string[]) => blockedBy.map((c) => c.replace('PROVENANCE_', 'PROV·').replace('MANDATE_', 'MANDATE·').replace('_', '·'));
-  const noseLen = (car: CarMesh) => NOSE_X - CRUSH_MAX * car.crush;
+  const noseLen = (car: CarMesh) => (NOSE_X - CRUSH_MAX * car.crush) * CAR_SCALE;
 
   /** Drop the lane's current sim (end state persists on the car) so ordinary motion can resume. */
   function endSim(l: LaneActor) {
@@ -396,13 +412,15 @@ export function mountArena(root: HTMLElement) {
     l.phase = 'sim';
     l.speed = 0;
     a.sims.push(sim);
-    director.addTrauma(0.55);
+    if (barrier instanceof Barrier) barrier.flash();
+    director.addTrauma(0.45);
+    director.punch(new THREE.Vector3(l.x + 2, 0.8, l.car.group.position.z), 600);
     flash.classList.remove('on');
     void flash.offsetWidth;
     flash.classList.add('on');
     const loss = l.loss ?? 0;
-    const at = lanePos(l, 1.2).add(new THREE.Vector3(0, 0.6, 0));
-    window.setTimeout(() => floater(loss > 0 ? `−${fmtUsd(loss)}` : 'CRASH', at), 200);
+    const at = lanePos(l, 1.2).add(new THREE.Vector3(0, 1.2, 0));
+    window.setTimeout(() => floater(loss > 0 ? `−${fmtUsd(loss)}` : 'CRASH', at, 'red', 1100), 200);
     replays.push({ sim, side: l.variant === 'bare' ? -1 : 1, from: -0.07, to: 0.32, rate: 1 / 12, label: `${l.car.name} · ${l.barrier ? BARRIER_SHORT[l.barrier] : ''} · honeycomb barrier`, startWall: 0 });
   }
 
@@ -428,6 +446,7 @@ export function mountArena(root: HTMLElement) {
     const now = performance.now();
 
     box.makeEmpty();
+    let leaderK = -1;
     for (const a of actors.values()) {
       for (const v of ['bare', 'airbag'] as const) {
         const l = a.lanes[v];
@@ -488,16 +507,21 @@ export function mountArena(root: HTMLElement) {
         }
         l.car.setIdle(l.phase === 'waiting' || l.phase === 'parked' || l.phase === 'creep');
         l.car.update(dt, l.speed, director.camera);
-        if (!l.finished) {
+        if (!l.finished && l.phase !== 'parked') {
           const cx = l.car.group.position.x;
-          const stX = l.barrier ? STATION_X[idx(l.barrier)] : cx;
           const z = l.car.group.position.z;
-          box.expandByPoint(tmpV.set(Math.min(cx, stX) - 5, 0, z - 2.2));
-          box.expandByPoint(tmpV.set(Math.max(cx, stX) + 7, 3.5, z + 2.2));
+          box.expandByPoint(tmpV.set(cx - 4, 0, z - 2.4));
+          box.expandByPoint(tmpV.set(cx + 4, 4, z + 2.4));
+          if (l.barrier) leaderK = Math.max(leaderK, idx(l.barrier));
         }
       }
     }
     empty.style.display = actors.size ? 'none' : '';
+    if (leaderK >= 0 && !box.isEmpty()) {
+      // stations around the leader (−1 … +1), not the whole track
+      box.expandByPoint(tmpV.set(STATION_X[Math.max(0, leaderK - 1)] - 4, 0, box.min.z));
+      box.expandByPoint(tmpV.set(STATION_X[Math.min(STATION_X.length - 1, leaderK + 1)] + 4, 0, box.max.z));
+    }
     if (box.isEmpty()) {
       box.expandByPoint(tmpV.set(START_X - 6, 0, laneZ(1, 'bare') - 2));
       box.expandByPoint(tmpV.set(STATION_X[1] + 8, 3.5, laneZ(0, 'airbag') + 2));

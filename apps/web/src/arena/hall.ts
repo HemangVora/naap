@@ -1,14 +1,14 @@
 import * as THREE from 'three';
 import { BARRIERS, BARRIER_LABEL } from '../types';
-import { checkerTexture, floorTexture, hazardTexture, laneLabelTexture, signTexture, stencilTexture, tickTexture } from './textures';
+import { checkerTexture, floorTexture, hazardTexture, signTexture, stencilTexture, tickTexture } from './textures';
 import { BRAND } from '../brand';
 
 // Track runs along +x (screen left → right). Slots stack into depth along −z; the camera sits on +z.
 export const STATION_X = [0, 22, 44, 66, 88];
 export const START_X = -18;
 export const END_X = 104;
-export const SLOT_DZ = 7.4; // distance between lane pairs
-export const LANE_DZ = 3.2; // bare lane sits this far behind (−z) the sekisho lane
+export const SLOT_DZ = 8.2; // distance between lane pairs
+export const LANE_DZ = 3.7; // bare lane sits this far behind (−z) the sekisho lane
 export const MAX_SLOTS = 6;
 export const slotZ = (slot: number) => -slot * SLOT_DZ;
 export const laneZ = (slot: number, variant: 'bare' | 'airbag') => slotZ(slot) - (variant === 'bare' ? LANE_DZ : 0);
@@ -46,17 +46,10 @@ export function buildHall(scene: THREE.Scene) {
   const tickGeo = new THREE.PlaneGeometry(len, 0.5);
   const uv = tickGeo.attributes.uv as THREE.BufferAttribute;
   for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * len); // one tick per metre
-  const bareLabel = new THREE.MeshBasicMaterial({ map: laneLabelTexture('BARE · NO PROTECTION', 'bare'), transparent: true, depthWrite: false });
-  const sekLabel = new THREE.MeshBasicMaterial({ map: laneLabelTexture('SEKISHO · AIRBAG', 'sekisho'), transparent: true, depthWrite: false });
-  const labelGeo = new THREE.PlaneGeometry(8, 1.25);
   for (let s = 0; s < MAX_SLOTS; s++) {
     for (const v of ['bare', 'airbag'] as const) {
       const z = laneZ(s, v);
-      const label = new THREE.Mesh(labelGeo, v === 'bare' ? bareLabel : sekLabel);
-      label.rotation.x = -Math.PI / 2;
-      label.position.set(START_X - 3, 0.012, z);
-      scene.add(label);
-      for (const dz of [-1.55, 1.55]) {
+      for (const dz of [-1.8, 1.8]) {
         const l = new THREE.Mesh(lineGeo, lineMat);
         l.rotation.x = -Math.PI / 2;
         l.position.set(cx, 0.006, z + dz);
@@ -68,7 +61,7 @@ export function buildHall(scene: THREE.Scene) {
       scene.add(cable);
       const ticks = new THREE.Mesh(tickGeo, tickMat);
       ticks.rotation.x = -Math.PI / 2;
-      ticks.position.set(cx, 0.008, z + 1.3);
+      ticks.position.set(cx, 0.008, z + 1.55);
       scene.add(ticks);
     }
   }
@@ -115,11 +108,9 @@ export function buildHall(scene: THREE.Scene) {
     scene.add(stand);
   }
   const signMat = new THREE.MeshBasicMaterial({ map: signTexture(BRAND.name, BRAND.long) });
-  for (const x of [STATION_X[1], STATION_X[3]]) {
-    const sign = new THREE.Mesh(new THREE.PlaneGeometry(16, 4), signMat);
-    sign.position.set(x + 11, 6.4, wallZ + 0.08);
-    scene.add(sign);
-  }
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(16, 4), signMat); // far wall only, low, between the checkerboards
+  sign.position.set(STATION_X[2] + 11, 3.0, wallZ + 0.08);
+  scene.add(sign);
   const skirt = new THREE.Mesh(new THREE.PlaneGeometry(360, 0.5), new THREE.MeshBasicMaterial({ map: hazardTexture([90, 1]) }));
   skirt.position.set(44, 0.25, wallZ + 0.06);
   scene.add(skirt);

@@ -200,7 +200,9 @@ export class Barrier {
     const comb = new THREE.Mesh(G.comb, M.combSide);
     comb.position.set(0.22, 0.85, -0.55);
     comb.castShadow = true;
-    this.face = new THREE.Mesh(G.face.clone(), combMat());
+    this.face = new THREE.Mesh(G.face.clone(), combMat().clone());
+    this.face.material.emissive = new THREE.Color(0xfff2b0);
+    this.face.material.emissiveIntensity = 0;
     this.face.position.set(0.005, 0.85, -0.55);
     this.face.rotation.y = -Math.PI / 2;
     this.faceOrig = (this.face.geometry.attributes.position.array as Float32Array).slice();
@@ -218,9 +220,19 @@ export class Barrier {
     this.dent = d;
   }
 
+  private flashT = 0;
+  /** Bright pop on the honeycomb face at impact so the main view reads the hit. */
+  flash() {
+    this.flashT = 0.6;
+  }
+
   update(dt: number) {
     this.lift += (this.liftTarget - this.lift) * Math.min(1, dt * 3);
     this.group.position.y = this.lift;
+    if (this.flashT > 0) {
+      this.flashT = Math.max(0, this.flashT - dt);
+      this.face.material.emissiveIntensity = 2.2 * (this.flashT / 0.6);
+    }
     if (Math.abs(this.dent - this.appliedDent) > 0.002) {
       this.appliedDent = this.dent;
       const p = this.face.geometry.attributes.position as THREE.BufferAttribute;
@@ -252,7 +264,8 @@ export class SoftTarget {
 
   constructor(x: number, z: number) {
     this.group.position.set(x, 0, z);
-    this.rearX = x - 1.8;
+    this.group.scale.setScalar(1.4);
+    this.rearX = x - 1.8 * 1.4;
     const body = new THREE.Mesh(G.gvt, M.gvt);
     body.position.y = 0.72;
     body.castShadow = true;

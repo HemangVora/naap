@@ -5,6 +5,8 @@ import { billboardTexture, crackTexture, roundelTexture, sekiBadgeTexture, tapeT
 export const CAR_LEN = 4.2;
 export const NOSE_X = CAR_LEN / 2;
 export const CRUSH_MAX = 0.72; // how far the nose folds back at crush = 1
+/** Cars are drawn 1.4× so they read at gantry distance; all world-space maths multiplies by this. */
+export const CAR_SCALE = 1.4;
 
 const LEN_SEGS = 32; // ≥ 24 length segments so the crush is real vertex deformation
 
@@ -207,8 +209,9 @@ export class CarMesh {
 
     this.billboardTex = billboardTexture(name, sub, color);
     this.billboard = new THREE.Mesh(G.billboard, new THREE.MeshBasicMaterial({ map: this.billboardTex, transparent: true, depthWrite: false }));
-    this.billboard.position.set(0, 3.0, 0);
+    this.billboard.position.set(0, 2.9, 0);
     this.group.add(this.chassis, this.billboard);
+    this.group.scale.setScalar(CAR_SCALE);
   }
 
   private shapeBody(geo: THREE.BufferGeometry) {
