@@ -42,7 +42,9 @@ async function chainOrFake(): Promise<{ chain: Chain; fork?: ForkHandle; live: b
 
 export async function createWiring(): Promise<Wiring> {
   process.env.WEATHER_ADDRESS ??= WEATHER;
-  const seed = process.env.SIGNER_SEED || 'crumple-dev-signer-seed';
+  // Fail closed: a guessable seed means guessable car keys. Only local development may fall back.
+  const seed = process.env.SIGNER_SEED || (process.env.NODE_ENV === 'development' ? 'crumple-dev-signer-seed' : '');
+  if (!seed) throw new Error('SIGNER_SEED is required outside NODE_ENV=development');
   const ownerAddress = privateKeyToAccount(keccak256(toHex(`owner:${seed}`))).address;
 
   const [{ mandates, ratings, live: ensLive }, { chain, fork, live: forkLive }] = await Promise.all([mandatesAndRatings(), chainOrFake()]);

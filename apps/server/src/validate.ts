@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import type { BuiltModel, CarSpec } from '@crumple/core';
 
 const MODELS: BuiltModel[] = ['claude-haiku-4-5-20251001', 'claude-sonnet-5'];
@@ -38,5 +39,6 @@ export function validateSpec(body: SpecInput, ownerToken: string | undefined): C
 /** ENS-label-safe id: slug of the name + 4 random chars. */
 export function carId(name: string): string {
   const slug = name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 16) || 'car';
-  return `${slug}-${Math.random().toString(36).slice(2, 6)}`;
+  const suffix = [...randomBytes(6)].map((b) => 'abcdefghijklmnopqrstuvwxyz0123456789'[b % 36]).join('');
+  return `${slug}-${suffix}`;
 }

@@ -12,6 +12,9 @@ import { Store, toPublic } from './store.js';
 import { Bus } from './bus.js';
 import { Cooldown, RunQueue } from './queue.js';
 import { carId, validateSpec, type SpecInput } from './validate.js';
+
+/** Global bound on waiting cars (each run costs LLM credit). */
+const MAX_QUEUED_CARS = Number(process.env.MAX_QUEUED_CARS ?? 12);
 import type { Wiring } from './wiring.js';
 
 export async function buildApp(w: Wiring, store = new Store()) {
@@ -76,12 +79,17 @@ export async function buildApp(w: Wiring, store = new Store()) {
     if (typeof spec !== 'string' && (body as { isOwnerCar?: boolean }).isOwnerCar && !spec.isOwnerCar)
       return reply.code(403).send({ error: 'owner token does not match' });
     if (typeof spec === 'string') return reply.code(400).send({ error: spec });
-    const phone = String(req.headers['x-phone-id'] ?? req.ip);
+    // Cooldown keyed by IP + phone id: the header alone is client-controlled, and IP alone would lock out a whole venue NAT.
+    // The hard cost bound is the global queue cap below, which a spoofed header cannot bypass.
+    const phone = `${req.ip}|${String(req.headers['x-phone-id'] ?? '').slice(0, 64)}`;
     const wait = spec.isOwnerCar ? 0 : cooldown.check(phone);
     if (wait) return reply.code(429).send({ error: `One car per minute — try again in ${wait}s` });
+    if (!spec.isOwnerCar && queue.ids().length >= MAX_QUEUED_CARS)
+      return reply.code(429).send({ error: 'The start line is full — try again in a minute' });
     cooldown.mark(phone);
 
-    const id = carId(spec.name);
+    let id = carId(spec.name);
+    while (store.getCar(id)) id = carId(spec.name);
     const { openaiApiKey, ...publicSpec } = spec;
     const car: Car = {
       id,
