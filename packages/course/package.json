@@ -5,5 +5,10 @@
   "type": "module",
   "main": "src/index.ts",
   "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "test": "vitest run .",
+    "smoke:jev": "tsx --env-file=../../.env scripts/smoke-jev.ts",
+    "smoke": "tsx --env-file=../../.env scripts/smoke.ts"
+  },
   "dependencies": { "@crumple/core": "workspace:*", "@anthropic-ai/sdk": "^0.128.0", "@typesafe-ai/sdk": "^0.6.0", "openai": "^5.0.0" }
 }
