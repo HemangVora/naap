@@ -74,3 +74,33 @@ Verified live on 2026-09-26 19:40 JST: discovery document, JWKS (one RS256 key, 
 - Not yet run against real credentials (portal registration is a human step). Everything above the JWKS layer is exercised only with the mocked fetch; the discovery + JWKS + `invalid_client` paths were hit live.
 - `private_key_jwt` client auth not implemented (secret-based only).
 - No QR rendering in the CLI (the arena renders the QR from `verificationUri`).
+
+---
+
+# Lane: world (3D) — NaAP World v3, the open proving ground
+
+Spec: `docs/design/world-v3.md`. Route `/world` (`?mock=1` multi-track mock, `?tour=1` start the auto-tour now, `?tour=0` never, `?fps=1` fps / draw-call pill). `/classic` still mounts the v2 arena.
+
+## Files
+
+- `apps/web/src/world/index.ts` — mount, event → motion (v2 state machine per lane, now per track + step), crash/AEB via `arena/sims.ts`, high-speed-cam inset (crashes first), auto-tour, click/dbl-click/Esc, report card, `window.__world` debug hooks (`follow(id, variant)`, `overview()`, `tour()`).
+- `world/layout.ts` — plot grid + deterministic spiral (cells sorted by metric distance from the centre, ties by angle), lane/slot/station maths. Extra concurrent cars on one track get extra lane pairs toward +z (max 3).
+- `world/track.ts` — `TrackView`: asphalt, lines, kerbs, verge, gantry sign "<name> · by <author>", painted run-up name, flags, per-obstacle props, floating "fooled a/b" counters (from `Stats.attacks`; over-limit = bare "paid without asking", derived), lane-pair fixtures (v2 `Gate`/`Barrier`/`SoftTarget`).
+- `world/props.ts` — toll kiosk (legit / over-limit), Morse billboard (shared animated canvas), inbox tower (freysa), swapped road sign with 402 shield (x402-swap).
+- `world/env.ts` — sky dome + haze fog, warm sun with a shadow box that follows the view, grass, concrete apron (refit as plots are added), instanced light poles, grandstand with crowd.
+- `world/car.ts` — `WorldCar extends CarMesh`: Kenney glTF body re-based into the v2 car frame (nose +x at `NOSE_X`), paint recoloured to `car.color` by hue (vertex colours), calibration roundels + Sekisho roof badge, crush = same fold law as v2 applied to the glTF body verts (seeded by position so shared verts move together), front wheels set back. Falls back to the v2 procedural shell if models fail to load.
+- `world/nav.ts` — orbit/fly camera (drag orbit, right/shift-drag pan, wheel zoom, WASD/arrows fly, Q/E down/up), chase cam, framing inside the HUD-safe rect (view offset).
+- `world/minimap.ts` — plots, cars as dots (red ring = crumpled), camera footprint; click to glide.
+- `world/tex.ts` — canvas textures (asphalt, concrete, grass, kerbs, gantry, counters, Morse, inbox, 402 sign, kiosk).
+- `apps/web/src/pages/tracks.ts` — `/tracks/new` builder: library cards (icon, incident, one-line story), 1–8 obstacles, disguise (plain/Morse/base64/hex) for grok-morse / freysa / x402-swap, amount ($0.01–$1000), reorder/remove, preview strip, `POST /api/tracks` → links to `/join?track=<id>` and `/world`.
+- `pages/join.ts` — "Pick a track" select fed by `GET /api/tracks` (`?track=` preselects), sends `trackId`.
+- `store.ts` — `tracks`, `serverStats`, `reports`, per-lane `step` + `steps[]`; missing `step`/`trackId` (old server) → first obstacle of that type at/after the lane's current step; missing `stats` → derived locally (`store.stats()`).
+- `hud.ts` — tiles: Agents tested · Attacks faced · Most dangerous attack ("x402 payee swap · fooled 5/6") · Saved by Sekisho ("$1,204 kept"); the old bare-crash-% headline is gone. Leaderboard shows each car's track; verdict cards show track + obstacle #; "+ Build a track" above the QR; mini-map heads the right rail.
+
+## Measured
+
+Headed Chromium, 1600×900, MacBook: 119–123 fps (vsync cap) with 6 cars on 5 tracks in the mock, 350–820 draw calls. Screens: `apps/web/screens/world-*.png`.
+
+## Credits
+
+Car bodies: **Kenney "Car Kit"** (www.kenney.nl), CC0 1.0 — `apps/web/public/models/kenney/` (`sedan`, `sedan-sports`, `hatchback-sports`, `suv` + `Textures/colormap.png`, licence file alongside).

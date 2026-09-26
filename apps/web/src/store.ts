@@ -6,14 +6,22 @@ import type {
   CheckResult,
   Integrations,
   Rating,
+  RunReport,
+  Stats,
   StepUpResult,
+  TrackSpec,
   Variant,
 } from './types';
+import { ATTACK_TYPES, BARRIER_INCIDENT, DEFAULT_TRACK_ID, STANDARD_TRACK } from './types';
 
 export interface LaneState {
   runId?: string;
   current?: BarrierId;
+  /** 0-based obstacle index on the car's track (from the event, or derived when the server omits it). */
+  step?: number;
   results: Partial<Record<BarrierId, BarrierResult>>;
+  /** Results by obstacle index (tracks may repeat a barrier type). */
+  steps: BarrierResult[];
   finished?: { lossUsd: number; stars: number };
 }
 
@@ -44,6 +52,8 @@ export interface VerdictCard {
   id: number;
   carId: string;
   barrierId: BarrierId;
+  step: number;
+  trackId: string;
   variant: 'bare' | 'airbag';
   outcome: string;
   reason: string;
@@ -72,6 +82,12 @@ export interface State {
   cars: Map<string, CarState>;
   queue: string[];
   checks: CheckLine[];
+  /** Every known track, keyed by id (always contains the standard track). */
+  tracks: Map<string, TrackSpec>;
+  /** AI-written report cards, by car id (arrive when a run finishes). */
+  reports: Map<string, RunReport>;
+  /** Server stats; undefined until the server sends them (the HUD then derives them locally). */
+  serverStats?: Stats;
   /** Paced verdict cards, newest last. */
   cards: VerdictCard[];
   headline: Headline;
@@ -101,6 +117,8 @@ export class Store {
     queue: [],
     checks: [],
     cards: [],
+    reports: new Map(),
+    tracks: new Map([[DEFAULT_TRACK_ID, STANDARD_TRACK as TrackSpec]]),
     headline: { bareCrashRate: 0, avgBareLossUsd: 0, airbagCrashes: 0, cars: 0 },
     offline: new Set(),
     connected: false,
@@ -143,14 +161,14 @@ export class Store {
     let c = this.state.cars.get(id);
     if (!c) {
       c = {
-        car: seed ?? { id, name: id, color: '#f5c400', kind: 'built', ensName: `${id}.crumple.eth`, isOwnerCar: false },
+        car: { ...(seed ?? { id, name: id, color: '#f5c400', kind: 'built', ensName: `${id}.naap.eth`, isOwnerCar: false }), trackId: seed?.trackId || DEFAULT_TRACK_ID },
         joinedAt: Date.now(),
         order: this.order++,
-        lanes: { bare: { results: {} }, airbag: { results: {} } },
+        lanes: { bare: { results: {}, steps: [] }, airbag: { results: {}, steps: [] } },
       };
       this.state.cars.set(id, c);
     } else if (seed) {
-      c.car = { ...c.car, ...seed };
+      c.car = { ...c.car, ...seed, trackId: seed.trackId || c.car.trackId || DEFAULT_TRACK_ID };
     }
     return c;
   }
@@ -177,8 +195,23 @@ export class Store {
           if (c.ratingOnchain) cs.onchain = { txHash: c.ratingOnchain.txHash, ensName: c.ensName };
         }
         s.queue = e.queue;
+        for (const t of e.tracks ?? []) s.tracks.set(t.id, t);
+        if (e.stats) s.serverStats = e.stats;
         break;
       }
+      case 'track.created':
+        if (e.track?.id) s.tracks.set(e.track.id, e.track);
+        break;
+      case 'stats':
+        if (e.stats) s.serverStats = e.stats;
+        break;
+      case 'report':
+        if (e.report) {
+          s.reports.set(e.carId, e.report);
+          const c = this.ensureCar(e.carId);
+          if (e.report.rating) c.rating = e.report.rating;
+        }
+        break;
       case 'car.joined':
         this.ensureCar(e.car.id, e.car);
         break;
@@ -187,7 +220,7 @@ export class Store {
         break;
       case 'run.started': {
         const c = this.ensureCar(e.carId);
-        c.lanes[e.variant] = { runId: e.runId, results: {} };
+        c.lanes[e.variant] = { runId: e.runId, results: {}, steps: [] };
         s.queue = s.queue.filter((id) => id !== e.carId);
         break;
       }
@@ -196,6 +229,8 @@ export class Store {
         const l = c.lanes[e.variant];
         l.runId = e.runId;
         l.current = e.barrierId;
+        if (e.trackId && e.trackId !== c.car.trackId) c.car.trackId = e.trackId;
+        l.step = this.stepOf(c, e.barrierId, e.step, l.step);
         break;
       }
       case 'trace':
@@ -227,13 +262,16 @@ export class Store {
       }
       case 'barrier.result': {
         const c = this.ensureCar(e.carId);
-        c.lanes[e.result.variant].results[e.result.barrierId] = e.result;
-        const r = e.result;
+        const lane = c.lanes[e.result.variant];
+        const step = this.stepOf(c, e.result.barrierId, e.result.step, lane.step);
+        const r: BarrierResult = { ...e.result, step, trackId: e.result.trackId || c.car.trackId };
+        lane.results[r.barrierId] = r;
+        lane.steps[step] = r;
         const interesting = r.variant === 'airbag' || r.outcome === 'CRASH' || (r.barrierId === 'over-limit' && r.outcome === 'PAID');
         if (interesting) {
           const checks = s.checks.filter((l) => l.carId === r.carId && l.barrierId === r.barrierId && l.runId === r.runId).map((l) => l.check);
           this.cardQueue.push({
-            id: this.seq++, carId: r.carId, barrierId: r.barrierId, variant: r.variant, outcome: r.outcome, reason: r.reason,
+            id: this.seq++, carId: r.carId, barrierId: r.barrierId, step: r.step, trackId: r.trackId, variant: r.variant, outcome: r.outcome, reason: r.reason,
             lossUsd: r.lossUsd, failed: checks.filter((k) => !k.ok), passed: checks.filter((k) => k.ok).length,
           });
           this.pumpCards();
@@ -263,6 +301,49 @@ export class Store {
         break;
     }
     this.emit(e);
+  }
+
+  /** Step from the event, else the first obstacle of that type at or after the lane's current step (old server shape). */
+  private stepOf(c: CarState, barrierId: BarrierId, step: number | undefined, from: number | undefined): number {
+    if (typeof step === 'number' && step >= 0) return step;
+    const obs = this.trackOf(c.car.trackId).obstacles;
+    const start = Math.max(0, from ?? 0);
+    for (let i = start; i < obs.length; i++) if (obs[i].type === barrierId) return i;
+    const first = obs.findIndex((o) => o.type === barrierId);
+    return first >= 0 ? first : start;
+  }
+
+  trackOf(id: string | undefined): TrackSpec {
+    return this.state.tracks.get(id || DEFAULT_TRACK_ID) ?? this.state.tracks.get(DEFAULT_TRACK_ID)!;
+  }
+
+  /** Server stats, or the same numbers derived from what this client has seen. */
+  stats(): Stats {
+    const s = this.state;
+    if (s.serverStats) return s.serverStats;
+    let agentsTested = 0;
+    let attacksFaced = 0;
+    let bareLossUsd = 0;
+    let sekishoLossUsd = 0;
+    const by = new Map<BarrierId, { attempts: number; fooled: number }>();
+    for (const c of s.cars.values()) {
+      if (c.lanes.bare.finished || c.rating) agentsTested++;
+      for (const r of c.lanes.bare.steps) {
+        if (!r) continue;
+        bareLossUsd += r.lossUsd;
+        if (!ATTACK_TYPES.includes(r.barrierId)) continue;
+        attacksFaced++;
+        const a = by.get(r.barrierId) ?? { attempts: 0, fooled: 0 };
+        a.attempts++;
+        if (r.outcome === 'CRASH') a.fooled++;
+        by.set(r.barrierId, a);
+      }
+      for (const r of c.lanes.airbag.steps) if (r) sekishoLossUsd += r.lossUsd;
+    }
+    const attacks = [...by.entries()]
+      .map(([type, a]) => ({ type, label: BARRIER_INCIDENT[type], ...a }))
+      .sort((x, y) => y.fooled / Math.max(1, y.attempts) - x.fooled / Math.max(1, x.attempts) || y.fooled - x.fooled);
+    return { agentsTested, attacksFaced, bareLossUsd, sekishoLossUsd, savedUsd: bareLossUsd - sekishoLossUsd, attacks, tracks: s.tracks.size };
   }
 
   private emit(e: ArenaEvent | null) {

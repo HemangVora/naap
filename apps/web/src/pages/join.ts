@@ -1,4 +1,5 @@
-import type { CarPublic, CarSpec } from '../types';
+import type { CarPublic, CarSpec, TrackSpec } from '../types';
+import { DEFAULT_TRACK_ID, STANDARD_TRACK, BARRIER_SHORT } from '../types';
 import { el, qs } from '../dom';
 import { isMock } from '../feed';
 import { brandHeader } from '../brand';
@@ -38,6 +39,43 @@ export function mountJoin(root: HTMLElement) {
     el('p', { class: 'lead', text: 'Your agent drives five barriers twice: once bare, once behind the Sekisho airbag. Watch it on the big screen.' }),
   );
   if (ownerToken) page.append(el('div', { class: 'owner-banner', text: 'Owner mode: this is car #1. Over-limit payments will ask you to approve on World ID.' }));
+
+  // ── Pick a track (GET /api/tracks; default: the NaAP standard course) ──
+  const wantedTrack = params.get('track');
+  let trackId = wantedTrack || DEFAULT_TRACK_ID;
+  const trackSel = el('select', { name: 'trackId', 'aria-label': 'Track' });
+  const trackHint = el('div', { class: 'hint' });
+  const setTracks = (list: TrackSpec[]) => {
+    if (!list.some((t) => t.id === DEFAULT_TRACK_ID)) list = [STANDARD_TRACK as TrackSpec, ...list];
+    if (wantedTrack && list.some((t) => t.id === wantedTrack) && trackSel.dataset.touched !== '1') trackId = wantedTrack;
+    else if (!list.some((t) => t.id === trackId)) trackId = DEFAULT_TRACK_ID;
+    trackSel.innerHTML = '';
+    for (const t of list) {
+      const o = el('option', { value: t.id, text: `${t.name} · by ${t.author} (${t.obstacles.length})` });
+      if (t.id === trackId) o.selected = true;
+      trackSel.append(o);
+    }
+    const cur = list.find((t) => t.id === trackId);
+    trackHint.textContent = cur ? cur.obstacles.map((o) => BARRIER_SHORT[o.type]).join(' → ') : '';
+    trackSel.onchange = () => {
+      trackSel.dataset.touched = '1';
+      trackId = trackSel.value;
+      const t = list.find((x) => x.id === trackId);
+      trackHint.textContent = t ? t.obstacles.map((o) => BARRIER_SHORT[o.type]).join(' → ') : '';
+    };
+  };
+  setTracks([STANDARD_TRACK as TrackSpec]);
+  if (mock) import('../mock-feed').then((m) => setTracks([...m.MOCK_TRACKS])).catch(() => {});
+  else
+    fetch('/api/tracks')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { tracks?: TrackSpec[] } | TrackSpec[] | null) => {
+        const list = Array.isArray(d) ? d : d?.tracks;
+        if (list?.length) setTracks(list);
+      })
+      .catch(() => {});
+  const trackField = el('div', { class: 'field' }, el('label', { text: 'Pick a track' }), trackSel, trackHint, el('div', { class: 'hint', html: `Or <a href="/tracks/new${mock ? '?mock=1' : ''}">build your own track</a>.` }));
+  page.append(trackField);
 
   const tabs = el('div', { class: 'tabs', role: 'tablist' });
   const tabBuild = el('button', { role: 'tab', 'aria-selected': 'true', text: 'Build' });
@@ -211,7 +249,7 @@ export function mountJoin(root: HTMLElement) {
         const res = await fetch(url, {
           method: 'POST',
           headers: { 'content-type': 'application/json', ...(ownerToken ? { 'x-owner-token': ownerToken } : {}) },
-          body: JSON.stringify(spec),
+          body: JSON.stringify({ ...spec, trackId }),
         });
         if (!res.ok) throw new Error((await res.text().catch(() => '')) || `Server said ${res.status}`);
         const data = (await res.json()) as { car: CarPublic; sessionToken: string };
