@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Control, Mandate, TripwireResult } from '@crumple/core';
 import { FAKE_ATTACKER, FAKE_WEATHER, FakeMandateSource, FakeScreener } from '@crumple/core';
 import { evaluatePolicy, evaluatePolicyPure } from './policy.js';
+import { short } from './util.js';
 import { legitIntent, mandateFor, session } from './test-fixtures.js';
 
 const ORDER: Control[] = ['PROVENANCE_AMOUNT', 'PROVENANCE_PAYEE', 'TAINT', 'MANDATE_PAYEE', 'MANDATE_EXPIRED', 'CAP_TX', 'CAP_DAILY', 'INTERCEPTA', 'JEV_TRIPWIRE'];
@@ -19,7 +20,7 @@ describe('evaluatePolicyPure', () => {
     expect(v.checks.map((c) => c.control)).toEqual(ORDER);
     expect(v.checks.every((c) => c.ok)).toBe(true);
     expect(v).toMatchObject({ decision: 'PAY', blockedBy: [] });
-    expect(v.reason).toBe('Pay $1 to weather.crumple.eth (0x1111…1111) — every check passed');
+    expect(v.reason).toBe('Pay $1 to weather.crumple.eth (0x111111…1111) — every check passed');
   });
 
   it('is pure: same inputs, same verdict', async () => {
@@ -70,7 +71,7 @@ describe('evaluatePolicyPure', () => {
     const v = evaluatePolicyPure(intent, mandate, tainted, { screen: { ...pass, address: FAKE_ATTACKER }, now: 1 });
     expect(v.decision).toBe('REFUSE');
     expect(v.blockedBy).toEqual(['TAINT', 'MANDATE_PAYEE']);
-    expect(v.reason).toBe('Session read untrusted content (inbox · treasury@freysa.ai), so only mandate payees may be paid — 0xbad0…0bad is not one');
+    expect(v.reason).toBe('Session read untrusted content (inbox · treasury@freysa.ai), so only mandate payees may be paid — 0xbad000…0bad is not one');
     // provenance checks pass in boundary mode (they are unknowable, not failed)
     expect(v.checks[0]).toMatchObject({ control: 'PROVENANCE_AMOUNT', ok: true });
     expect(v.checks[1]).toMatchObject({ control: 'PROVENANCE_PAYEE', ok: true });
@@ -97,7 +98,7 @@ describe('evaluatePolicyPure', () => {
     const block = { ...pass, verdict: 'BLOCK' as const, toxicScore: 95, traits: [{ name: 'drainer', description: 'known drainer address' }] };
     const v = evaluatePolicyPure(legitIntent(), mandate, session('legit'), { screen: block, now: 1 });
     expect(v.decision).toBe('REFUSE');
-    expect(v.reason).toBe('Intercepta BLOCK for 0x1111…1111: known drainer address · offline');
+    expect(v.reason).toBe('Intercepta BLOCK for 0x111111…1111: known drainer address · offline');
     expect(evaluatePolicyPure(legitIntent(), mandate, session('legit'), { screen: { ...pass, verdict: 'HOLD' }, now: 1 }).decision).toBe('REFUSE');
     expect(evaluatePolicyPure(legitIntent(), mandate, session('legit'), { screen: null, now: 1 }).blockedBy).toEqual(['INTERCEPTA']);
     const tokenBad = evaluatePolicyPure(legitIntent(), mandate, session('legit'), { screen: pass, tokenScreen: { ...pass, verdict: 'BLOCK' }, now: 1 });
@@ -121,5 +122,14 @@ describe('evaluatePolicy (with the fake screener)', () => {
     expect(screen.detail).toMatch(/PASS .* and USDC/);
     const bad = await evaluatePolicy(legitIntent({ payTo: { value: FAKE_ATTACKER, label: 'TOOL', source: 'resolve(x)' } }), mandate, session('legit'), { screener: new FakeScreener(), now: 1 });
     expect(bad.blockedBy).toEqual(expect.arrayContaining(['MANDATE_PAYEE', 'INTERCEPTA']));
+  });
+});
+
+describe('short()', () => {
+  it('shows 6+4 hex chars and never reads as the zero address', () => {
+    expect(short('0x0000553f880ffa3728b290e04e819053a3590000')).toBe('0x000055…0000');
+    expect(short('0x00000012aa00000000000000000000000000bbbb')).toBe('0x0000001…bbbb');
+    expect(short('0x1111111111111111111111111111111111111111')).toBe('0x111111…1111');
+    expect(short('weather.crumple.eth')).toBe('weathe….eth');
   });
 });

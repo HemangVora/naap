@@ -3,10 +3,10 @@
 //   pnpm --filter @crumple/sekisho exec tsx --env-file=../../.env scripts/run-barriers.ts --live [--only=legit]   # real claude-sonnet-5 / haiku-4-5 (ANTHROPIC_API_KEY or OPENROUTER_API_KEY)
 // Prints the trace exactly as the arena would show it. Never prints secrets.
 import { existsSync, readFileSync } from 'node:fs';
-import { BARRIER_ORDER, FakeMandateSource, FakeScreener, FakeTripwire, GullibleDriver } from '@crumple/core';
+import { BARRIER_ORDER, FAKE_ATTACKER, FakeMandateSource, FakeScreener, FakeTripwire, GullibleDriver } from '@crumple/core';
 import { AnthropicLlmClient, llmFromEnv } from '../src/llm.js';
 import { createSekisho } from '../src/sekisho.js';
-import { barriers, car, mandateFor, scriptedLlm, session } from '../src/test-fixtures.js';
+import { barriers, car, courseGrokMorse, mandateFor, REAL_ATTACKER, scriptedLlm, session } from '../src/test-fixtures.js';
 
 function loadDotenv() {
   const p = new URL('../../../.env', import.meta.url).pathname;
@@ -31,14 +31,16 @@ async function main() {
   }
   const mandates = new FakeMandateSource();
   const mandate = await mandateFor(mandates);
-  const sekisho = createSekisho({ mandates, screener: new FakeScreener(), tripwire: new FakeTripwire(), llm });
+  const screener = new FakeScreener(new Set([FAKE_ATTACKER.toLowerCase(), REAL_ATTACKER.toLowerCase()]));
+  const sekisho = createSekisho({ mandates, screener, tripwire: new FakeTripwire(), llm });
   console.log(`mode: ${boundary ? 'boundary (GullibleDriver)' : 'full'} · llm: ${llm.live ? `${llm.plannerModel} / ${llm.readerModel}` : 'scripted (offline)'}\n`);
   const summary: string[] = [];
 
   const only = process.argv.find((a) => a.startsWith('--only='))?.slice(7);
   for (const id of BARRIER_ORDER) {
     if (only && id !== only) continue;
-    const obs = barriers[id];
+    // grok-morse uses the course's real text (3 tweets, address only inside the Morse) and the real drainer address
+    const obs = id === 'grok-morse' ? courseGrokMorse() : barriers[id];
     const t0 = Date.now();
     const out = boundary
       ? await sekisho.runBoundary(car, obs, await new GullibleDriver().act(obs), mandate, session(id))

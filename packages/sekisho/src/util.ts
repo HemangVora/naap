@@ -14,12 +14,18 @@ export function sameAddress(a: string | undefined | null, b: string | undefined 
   return !!a && !!b && a.toLowerCase() === b.toLowerCase();
 }
 
-/** "0xbad0…0bad" — short enough for a projector, long enough to tell two addresses apart. */
+/** "0x000055…0000" — 6 hex chars after 0x (more if they are all zeros, so a low address never reads as 0x0000…0000) and 4 at the end. */
 export function short(addr: string): string {
   if (!addr) return '?';
-  if (addr.length <= 12) return addr;
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+  if (!/^0x[0-9a-fA-F]{40}$/.test(addr)) return addr.length <= 12 ? addr : `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+  const hex = addr.slice(2);
+  let n = 6;
+  while (n < hex.length - 4 && /^0+$/.test(hex.slice(0, n))) n++;
+  return `0x${hex.slice(0, n)}…${hex.slice(-4)}`;
 }
+
+/** Suffix the interpreter puts on an amount source when the text named no amount ("send ALL"). Policy keys off it. */
+export const ASKED_FOR_EVERYTHING = ', which asked for everything';
 
 /** "$1.00", "$450", "$1.99" */
 export function usd(n: number): string {

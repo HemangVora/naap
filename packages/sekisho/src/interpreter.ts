@@ -4,7 +4,7 @@
 import type { Address, ContentItem, Labeled, Mandate, Observation, PaymentIntent, SessionState, TraceLine } from '@crumple/core';
 import type { Plan, PlanStep } from './planner.js';
 import type { ReaderOutput, ReaderQuote } from './reader.js';
-import { isAddress, sameAddress, short, trace, usd } from './util.js';
+import { ASKED_FOR_EVERYTHING, isAddress, sameAddress, short, trace, usd } from './util.js';
 
 export interface InterpreterDeps {
   carId: string;
@@ -161,6 +161,17 @@ async function payIntent(
   };
 }
 
+const ENCODING_NAMES: Record<string, string> = { morse: 'Morse', base64: 'base64', hex: 'hex', leetspeak: 'leetspeak', reversed: 'reversed', translated: 'translated' };
+
+/** "a Morse-coded reply by @drb_whale" — the reader's phrase, made to name the encoding when it forgot to. */
+function originOf(p: ReaderOutput['paymentRequests'][number], item: ContentItem | undefined): string {
+  const enc = p.decodedFrom ? (ENCODING_NAMES[p.decodedFrom] ?? p.decodedFrom) : null;
+  if (!enc || p.origin.toLowerCase().includes(enc.toLowerCase())) return p.origin;
+  const author = /^(@[A-Za-z0-9_]+)/.exec(item?.source ?? '')?.[1];
+  const medium = item?.kind === 'tweet' ? 'reply' : item?.kind === 'http402' ? '402 body' : (item?.kind ?? 'message');
+  return `a ${enc}-coded ${medium}${author ? ` by ${author}` : item?.source ? ` from ${item.source}` : ''}`;
+}
+
 /** read(): every payment request the reader saw becomes a candidate intent with ALL fields UNTRUSTED. */
 async function candidateIntent(
   p: ReaderOutput['paymentRequests'][number],
@@ -171,10 +182,10 @@ async function candidateIntent(
   base: Pick<PaymentIntent, 'runId' | 'carId' | 'barrierId' | 'mode'>,
 ): Promise<PaymentIntent | null> {
   let addr: Address | null = null;
-  if (isAddress(p.payTo)) addr = p.payTo;
+  if (isAddress(p.payTo)) addr = p.payTo.toLowerCase() as Address;
   else if (p.payTo && /\.eth$/i.test(p.payTo)) addr = await deps.resolve(p.payTo.toLowerCase()).catch(() => null); // name from text → still UNTRUSTED
   if (!addr) return null;
-  const origin = p.origin;
+  const origin = originOf(p, item);
   const unspecified = p.amountUsd == null;
   return {
     id,
@@ -184,7 +195,7 @@ async function candidateIntent(
     amountUsd: {
       value: unspecified ? session.balanceUsd : p.amountUsd!,
       label: 'UNTRUSTED',
-      source: unspecified ? `${origin}, which asked for everything` : origin,
+      source: unspecified ? `${origin}${ASKED_FOR_EVERYTHING}` : origin,
     },
     token: p.token,
     memo: { value: p.instruction || item?.source || 'untrusted request', label: 'UNTRUSTED', source: origin },

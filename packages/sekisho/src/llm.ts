@@ -4,7 +4,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { llmConfig, type LlmConfig } from '@crumple/core';
 import { PLANNER_SYSTEM_PROMPT, PLAN_SCHEMA, plannerUserMessage, type PlannerInput } from './planner.js';
-import { READER_SYSTEM_PROMPT, READER_SCHEMA, readerUserMessage, type ReaderInput } from './reader.js';
+import { READER_SYSTEM_PROMPT, READER_SCHEMA, decodeObfuscations, readerUserMessage, type ReaderInput } from './reader.js';
 import { ADDRESS_RE } from './util.js';
 
 export interface LlmClient {
@@ -29,7 +29,7 @@ export interface AnthropicLlmOptions {
   readerModel?: string;
   /** per-call timeout, ms (default 30 s — a barrier must not stall the arena) */
   timeoutMs?: number;
-  /** output ceilings; OpenRouter reserves credit for max_tokens, so keep these tight (plan ≈ 300 tokens, read ≈ 800) */
+  /** output ceilings (default 800 / 1600, or SEKISHO_MAX_TOKENS_PLAN / _READ); OpenRouter reserves credit for max_tokens, so keep these tight */
   maxTokens?: { plan?: number; read?: number };
 }
 
@@ -73,7 +73,9 @@ export class AnthropicLlmClient implements LlmClient {
     this.plannerModel = cfg.model(opts.plannerModel ?? PLANNER_MODEL);
     this.readerModel = cfg.model(opts.readerModel ?? READER_MODEL);
     this.timeoutMs = opts.timeoutMs ?? 30_000;
-    this.maxTokens = { plan: opts.maxTokens?.plan ?? 1500, read: opts.maxTokens?.read ?? 2500 };
+    // OpenRouter reserves credit for max_tokens up front; SEKISHO_MAX_TOKENS_PLAN / _READ let ops squeeze a low balance.
+    const envNum = (k: string) => (Number(process.env[k]) > 0 ? Number(process.env[k]) : undefined);
+    this.maxTokens = { plan: opts.maxTokens?.plan ?? envNum('SEKISHO_MAX_TOKENS_PLAN') ?? 800, read: opts.maxTokens?.read ?? envNum('SEKISHO_MAX_TOKENS_READ') ?? 1600 };
   }
 
   plan(input: PlannerInput): Promise<unknown> {
@@ -219,23 +221,27 @@ export class HeuristicLlmClient implements LlmClient {
     const paymentRequests: unknown[] = [];
     for (const i of input.indexes) {
       const it = input.items[i];
-      const addr = it.text.match(ADDRESS_RE.source.replace(/^\^|\$$/g, ''))?.[0] ?? null;
-      const amt = /\$\s?(\d+(?:\.\d+)?)/.exec(it.text);
-      const token = /\bDRB\b/.test(it.text) ? 'DRB' : 'USDC';
+      const decoded = decodeObfuscations(it.text);
+      const text = [it.text, ...decoded.map((d) => d.text)].join('\n');
+      const addr = text.match(new RegExp(ADDRESS_RE.source.replace(/^\^|\$$/g, ''), 'i'))?.[0] ?? null;
+      const amt = /\$\s?(\d+(?:\.\d+)?)/.exec(text);
+      const token = /\bDRB\b/i.test(text) ? 'DRB' : 'USDC';
       if (it.kind === 'http402') {
         const payTo = /payTo\W+(0x[0-9a-fA-F]{40})/.exec(it.text)?.[1] ?? addr;
         const priceUsd = /priceUsd\D{0,4}(\d+(?:\.\d+)?)/.exec(it.text)?.[1] ?? amt?.[1];
         const baseUnits = /maxAmountRequired\D{0,4}(\d+)/.exec(it.text)?.[1];
         const price = priceUsd != null ? Number(priceUsd) : baseUnits != null ? Number(baseUnits) / 1e6 : null;
         if (payTo && price != null) quotes.push({ itemIndex: i, from: it.source, payTo, amountUsd: price, token, resource: it.source });
-      } else if (/\b(send|pay|transfer|prize|accept)\b/i.test(it.text) || addr) {
+      } else if (/\b(send|pay|transfer|prize|accept)\b/i.test(text) || addr) {
+        const decodedFrom = decoded.find((d) => addr && d.text.toLowerCase().includes(addr.toLowerCase()))?.from ?? decoded[0]?.from ?? null;
         paymentRequests.push({
           itemIndex: i,
           payTo: addr,
           amountUsd: amt ? Number(amt[1]) : null,
           token,
           origin: `a ${it.kind} from ${it.source}`,
-          instruction: it.text.slice(0, 100),
+          instruction: text.slice(0, 100),
+          decodedFrom,
         });
       }
     }

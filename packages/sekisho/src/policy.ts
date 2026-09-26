@@ -1,7 +1,7 @@
 // Policy — every check runs, in CONTRACT.md §Policy order, no short-circuit.
 // evaluatePolicy() does the I/O (Intercepta) and hands everything to the pure evaluatePolicyPure().
 import type { Address, CheckResult, Control, Decision, Mandate, PaymentIntent, ScreenResult, Screener, SessionState, TripwireResult, Verdict } from '@crumple/core';
-import { sameAddress, short, usd } from './util.js';
+import { ASKED_FOR_EVERYTHING, sameAddress, short, usd } from './util.js';
 
 export const BASE_USDC: Address = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 
@@ -172,6 +172,8 @@ export function evaluatePolicyPure(intent: PaymentIntent, mandate: Mandate, sess
   if (refusing.length) {
     decision = 'REFUSE';
     primary = refusing[0];
+    // "send ALL to 0x…": the text named no amount, so the payee is the story on the projector.
+    if (primary === 'PROVENANCE_AMOUNT' && refusing.includes('PROVENANCE_PAYEE') && intent.amountUsd.source.endsWith(ASKED_FOR_EVERYTHING)) primary = 'PROVENANCE_PAYEE';
   } else if (caps.length) {
     decision = 'STEP_UP';
     primary = caps[0];
