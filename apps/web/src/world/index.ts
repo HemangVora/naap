@@ -88,7 +88,6 @@ const KIND_LABEL: Record<string, string> = { built: 'built', webhook: 'webhook �
 const APPROACH_GAP = 14;
 const CREEP_LIMIT = 7;
 const V_CRASH = 64 / 3.6;
-const IDLE_MS = 20_000;
 
 export async function mountWorld(root: HTMLElement) {
   const store = new Store();
@@ -151,7 +150,6 @@ export async function mountWorld(root: HTMLElement) {
   wrap.append(tourPill);
   const fpsPill = el('div', { class: 'fps-pill' });
   const showFps = params.has('fps');
-  const noTour = params.get('tour') === '0';
   fpsPill.style.display = showFps ? '' : 'none';
   wrap.append(fpsPill);
 
@@ -658,7 +656,7 @@ export async function mountWorld(root: HTMLElement) {
     else if (c.kind === 'dust') for (let k = 0; k < 4; k++) biomes.dust.puff(p.x, p.y + 0.3, p.z, 2.2, 1.2, 1.8);
   }
 
-  // ── navigation: click car → chase, click sign → frame track, dbl-click → glide, Esc → overview, idle → auto-tour ──
+  // ── navigation: click car → chase, click sign → frame track, dbl-click → glide, Esc → overview ──
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
   const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -678,7 +676,7 @@ export async function mountWorld(root: HTMLElement) {
   const frameAll = () => nav!.frameBox(allBounds, { pitch: 0.86, yaw: 0.22, pad: 1.4 });
   const frameTrack = (t: TrackView, yaw = 0.3) => nav!.frameBox(t.bounds(), { pitch: 0.62, yaw, pad: 1.35 });
 
-  /** Projector mode: after 20 s without input, cycle through active tracks and cut to crashes. */
+  /** Projector mode (?tour=1 only, never on idle): cycle through active tracks and cut to crashes. */
   const tour = {
     on: false,
     next: 0,
@@ -704,7 +702,6 @@ export async function mountWorld(root: HTMLElement) {
       followCar(a, l, 15);
     },
     update(now: number) {
-      if (!this.on && !noTour && now - nav!.lastInput > IDLE_MS) this.start();
       if (!this.on || now < this.next) return;
       const active = [...tracks.values()].filter((t) => [...actors.values()].some((a) => a.track === t && a.leaveAt === undefined));
       const list = active.length ? active : [...tracks.values()];
