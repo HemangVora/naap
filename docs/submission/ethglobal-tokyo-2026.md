@@ -65,21 +65,9 @@ Deploy Guard: https://naap-production.up.railway.app/guard
 
 ---
 
-## Demo video script (about 3:30)
+## Demo video script
 
-**0:00 to 0:20. Hook.** Arena on screen. "Agents now hold wallets, and they lose them to text: Grok x Bankrbot, Freysa, an x402 payee swap. NaAP crash-tests paying agents live, like Euro NCAP. Sekisho is the airbag."
-
-**0:20 to 0:50. Build a car.** Phone on `/join`: name, colour, persona, model; show the Connect tab (webhook, OpenAI API, MCP) for a second. "Or bring your own agent, even from Claude Code over MCP." Car appears in the arena as `<car>.naap.eth`.
-
-**0:50 to 1:40. The race.** Two lanes on a Base-mainnet fork. Legit barrier: both pay $1 to `compute.naap.eth`. x402 swap: the bare lane pays the attacker (crash, real fork USDC gone); the airbag lane shows the refusal reason (payee not the resolved mandate payee, Intercepta BLOCK on the attacker address). Over-limit: bare pays $40 without asking; airbag asks for owner approval (QR on screen). "Nothing the agent read could move the money. Only the owner can."
-
-**1:40 to 2:05. ENS.** Open the car's name on the Sepolia ENS app: mandate text records (`sekisho.payees`, caps, expiry) and the `naap.*` rating written after the run. Show the Etherscan revert: the agent's own key tried to edit its mandate and got `EACUnauthorizedAccountRoles`. Quick cut to Build a track / custom incident: type an attack in plain words, publish, it becomes `inc-<id>.naap.eth`.
-
-**2:05 to 3:10. Deploy Guard (`/guard`).** "Agents also ship code. Moonwell lost ~$1.78M to an AI-co-authored oracle bug." Tap the preset chip **Lending oracle (Moonwell-style)** (reliable path: no LLM wait). Press **Deploy & audit**. Walk the pending steps: compile, deploy to an isolated Base fork, attack from a stranger's wallet, revert. Result: VULNERABLE, the exact function named, the confirmed exploit line ("a stranger ... moved the price from X to Y") with the fork tx hash. Then tap **USDC vault (access-controlled)** and audit: same probes revert, SAFE. Optional if time: type a request and press **Write with AI** to show the drafter.
-
-**3:10 to 3:30. Close.** "Deterministic provenance, ENS mandates the agent can't edit, live Intercepta screening, and a pre-deploy guard for agent-written contracts. NaAP." Show GitHub URL and live URL.
-
----
+See [demo-script.md](demo-script.md) (≈3:40, slides then live demo).
 
 ## Prize write-ups
 
@@ -119,7 +107,7 @@ On-chain (Sepolia):
 - Per-key role grants to the relayer: https://sepolia.etherscan.io/tx/0x0b737cd36df073736cdf78e0d4b23dc5f5f11f902a25e3eaf457463a2915eb94
 - `compute.naap.eth` payee seeded: https://sepolia.etherscan.io/tx/0xc65daec06887a335e533133bfc7fd4e5fa619aee4b9956674d290df20a0f4ce8
 - Agent's edit of its own mandate, reverted (`EACUnauthorizedAccountRoles`): https://sepolia.etherscan.io/tx/0x9951d8731dacf9bb8635515a5e77ea76794d69a64115d2976710fc4b3a3c38fb
-- Example car name: https://sepolia.app.ens.domains/naap-demo.naap.eth
+- Example car name: `demo-wallet-y54i47.naap.eth` (read with `pnpm --filter @crumple/ens read-name demo-wallet-y54i47.naap.eth`; mandate write with records in the logs: https://sepolia.etherscan.io/tx/0xc5a263ed339a637deabaeb59cbd66ee53322d49d21be7655131317658119d7e5)
 
 ### Curvegrid: Best AI Agent Project
 

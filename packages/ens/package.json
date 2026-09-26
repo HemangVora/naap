@@ -10,6 +10,7 @@
     "seed-payee": "tsx --env-file=../../.env src/scripts/seed-payee.ts",
     "prove-eac": "tsx --env-file=../../.env src/scripts/prove-eac.ts",
     "smoke": "tsx --env-file=../../.env src/scripts/smoke.ts",
+    "read-name": "tsx --env-file=../../.env src/scripts/read-name.ts",
     "test": "vitest run --root ../.. packages/ens"
   },
   "dependencies": { "@crumple/core": "workspace:*", "viem": "^2.56.0" }

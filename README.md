@@ -57,7 +57,7 @@ Prizes: **Intercepta**, **ENS** and **Curvegrid**.
 - Live probe evidence: [`data/intercepta-probe.json`](data/intercepta-probe.json).
 
 ### ENS: the mandate *is* an ENS name
-- `naap.eth` is registered on **ENSv2 Sepolia** ([register tx](https://sepolia.etherscan.io/tx/0x6bc8fa48135d0e99f6ed5153d16cd74b718db97317cd2141430e3272fa803e94)). Every car becomes a subname, `<car>.naap.eth` (e.g. [`naap-demo.naap.eth`](https://sepolia.app.ens.domains/naap-demo.naap.eth)). The parent is `PARENT_ENS` in `@crumple/core`; `ENS_PARENT=<label>.eth` overrides it.
+- `naap.eth` is registered on **ENSv2 Sepolia** ([register tx](https://sepolia.etherscan.io/tx/0x6bc8fa48135d0e99f6ed5153d16cd74b718db97317cd2141430e3272fa803e94)). Every car becomes a subname, `<car>.naap.eth` (e.g. `naap-demo.naap.eth`; read its records with `pnpm --filter @crumple/ens read-name naap-demo.naap.eth` — the public ENS app still reads ENSv1, so it shows none). The parent is `PARENT_ENS` in `@crumple/core`; `ENS_PARENT=<label>.eth` overrides it.
 - Its **mandate** lives in text records: `sekisho.payees`, `sekisho.perTxCapUsd`, `sekisho.dailyCapBps`, `sekisho.expiresAt`.
 - Payees are ENS names, resolved at read time. `compute.naap.eth` (a GPU compute seller) resolves to the payee.
 - **Enhanced access control:** the relayer holds `ROLE_SET_TEXT` scoped per record key. The agent's key holds no roles, so its attempt to edit its own mandate **reverts on-chain** with `EACUnauthorizedAccountRoles` (`pnpm --filter @crumple/ens prove-eac`; [on-chain revert](https://sepolia.etherscan.io/tx/0x9951d8731dacf9bb8635515a5e77ea76794d69a64115d2976710fc4b3a3c38fb)).
