@@ -123,23 +123,24 @@ export function constructorPlan(abi: Abi): CtorPlan {
 
 /** A sandbox tx that was mined but reverted. */
 class TxReverted extends Error {}
-/** An attacker tx that went through but moved nothing the probe checks. */
+/**
+ * An attacker tx that went through but did not move the value the probe reads. NOT evidence of a guard: the probe's
+ * getter is picked by name (owner/admin, price/rate, USDC/ETH), not from what the function writes — setAdmin() can
+ * succeed while owner() stays put. So the finding keeps its severity.
+ */
 class NoEffect extends Error {}
 
 /**
- * A confirmable finding whose attacker call actually ran on the fork and reverted or moved nothing: the function is
- * almost certainly gated by a check the scanner does not recognise. Kept as a medium note to review, not a flaw.
+ * A confirmable finding whose attacker call actually ran on the fork and REVERTED: the function is almost certainly
+ * gated by a check the scanner does not recognise. Kept as a medium note to review, not a flaw. Only a revert earns
+ * this downgrade (the page counts these notes as "attack calls reverted on the fork").
  */
-export function unconfirmed(f: GuardFinding, how: 'reverted' | 'no-effect'): GuardFinding {
-  const what =
-    how === 'reverted'
-      ? 'On the sandbox fork a stranger’s call to it reverted'
-      : 'On the sandbox fork a stranger’s call to it went through but moved nothing';
+export function unconfirmed(f: GuardFinding): GuardFinding {
   return {
     ...f,
     severity: 'medium',
     title: `Unconfirmed: ${f.title}`,
-    detail: `${f.detail} ${what}, so it looks gated by a check the scanner doesn’t recognise. Review it.`,
+    detail: `${f.detail} On the sandbox fork a stranger’s call to it reverted, so it looks gated by a check the scanner doesn’t recognise. Review it.`,
   };
 }
 
@@ -224,7 +225,8 @@ async function deployAndProve(
     await anvil('anvil_setStorageAt', [USDC_ADDRESS, usdcBalanceSlot(target), numberToHex(usdToUnits(SANDBOX_USD), { size: 32 })]);
     await anvil('anvil_setBalance', [target, numberToHex(CONTRACT_WEI)]);
 
-    /** One attacker transaction against the sandbox contract; resolves only if it succeeded AND moved something. */
+    /** One attacker transaction against the sandbox contract; resolves only if it succeeded AND moved something.
+     *  Throws TxReverted if the tx reverted, NoEffect if it succeeded but the value read did not change. */
     const probe = async (id: string, fn: AbiFunction): Promise<GuardConfirmation> => {
       const sig = `${fn.name}(${fn.inputs.map((p) => p.type).join(',')})`;
       const call = (uint: bigint) => {
@@ -285,12 +287,13 @@ async function deployAndProve(
       try {
         out.push(fn ? { ...f, confirmed: await probe(f.id, fn) } : f);
       } catch (e) {
-        // The attacker call ran and reverted / moved nothing → a review note. Could not probe it at all (unfillable
-        // args, no getter to verify, an RPC hiccup) → the static finding stands as is.
-        if (e instanceof TxReverted) out.push(unconfirmed(f, 'reverted'));
-        else if (e instanceof NoEffect) out.push(unconfirmed(f, 'no-effect'));
+        // The attacker call ran and reverted → a review note. It succeeded but the value we read did not move (we may
+        // be reading the wrong variable), or it could not be probed at all (unfillable args, no getter to verify, an
+        // RPC hiccup) → the static finding stands as is.
+        if (e instanceof TxReverted) out.push(unconfirmed(f));
         else {
-          log(`probe of ${f.where ?? f.id} not run: ${(e as Error).message.split('\n')[0]}`);
+          const why = e instanceof NoEffect ? "probe succeeded but the checked value didn't move" : 'not run';
+          log(`probe of ${f.where ?? f.id} ${why}: ${(e instanceof Error ? e.message : String(e)).split('\n')[0]}`);
           out.push(f);
         }
       }
@@ -335,7 +338,7 @@ export function createGuardEngine(cfg: { rpcUrl?: string; log?: (msg: string) =>
         const proven = await serial(() => deployAndProve(rpcUrl, compiled, ctor, findings, log));
         return { ...report, ...proven, verdict: verdictOf(proven.findings) };
       } catch (e) {
-        log(`${report.contractName}: static-only, ${(e as Error).message.split('\n')[0]}`); // fork down, ctor reverted, …
+        log(`${report.contractName}: static-only, ${(e instanceof Error ? e.message : String(e)).split('\n')[0]}`); // fork down, ctor reverted, …
         return report;
       }
     },

@@ -39,10 +39,11 @@ describe('constructor fill', () => {
 
 describe('unconfirmed downgrade + contract name', () => {
   it('turns a reverted critical probe into a medium review note', () => {
-    const f = unconfirmed({ id: 'unprotected-withdraw', severity: 'critical', title: 'Anyone can drain the contract', detail: 'x() moves funds.' }, 'reverted');
+    const f = unconfirmed({ id: 'unprotected-withdraw', severity: 'critical', title: 'Anyone can drain the contract', detail: 'x() moves funds.' });
     expect(f.severity).toBe('medium');
     expect(f.title).toBe('Unconfirmed: Anyone can drain the contract');
-    expect(f.detail).toMatch(/^x\(\) moves funds\. .*reverted.*Review it\.$/);
+    expect(f.detail).toMatch(/^x\(\) moves funds\. .*stranger’s call to it reverted.*Review it\.$/);
+    expect(f.detail).not.toMatch(/moved nothing/);
     expect(f.confirmed).toBeUndefined();
   });
 
@@ -185,6 +186,54 @@ contract Treasury {
     expect(f.title).toMatch(/^Unconfirmed: /);
     expect(f.detail).toMatch(/reverted.*Review it\./);
     expect(f.confirmed).toBeUndefined();
+  }, 60_000);
+
+  // The probe reads a getter picked by NAME (owner before admin, price before rate, USDC/ETH balances), not the variable
+  // the flagged function writes. A stranger's call that SUCCEEDS but leaves that getter unchanged is no evidence of a
+  // guard, so the finding must keep its severity (only a revert downgrades it).
+  it('an unguarded setAdmin whose probe reads owner (unchanged) stays critical and VULNERABLE', async () => {
+    const r = await engine.audit(`pragma solidity ^0.8.24;
+contract Roles {
+    address public owner; address public admin;
+    constructor() { owner = msg.sender; admin = msg.sender; }
+    function setAdmin(address a) external { admin = a; }
+}`);
+    expect(r.address).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    const f = r.findings.find((x) => x.id === 'missing-access-control');
+    expect(f?.where).toMatch(/^setAdmin\(/);
+    expect(f?.severity).toBe('critical');
+    expect(f?.title).not.toMatch(/^Unconfirmed/);
+    expect(f?.confirmed).toBeUndefined();
+    expect(r.verdict).toBe('VULNERABLE');
+  }, 60_000);
+
+  it('an unguarded setRate whose probe reads price (unchanged) stays high and VULNERABLE', async () => {
+    const r = await engine.audit(`pragma solidity ^0.8.24;
+contract Feed {
+    uint256 public price = 100; uint256 public rate = 5;
+    function setRate(uint256 r) external { rate = r; }
+}`);
+    expect(r.address).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    const f = r.findings.find((x) => x.id === 'unprotected-price');
+    expect(f?.severity).toBe('high');
+    expect(f?.title).not.toMatch(/^Unconfirmed/);
+    expect(f?.confirmed).toBeUndefined();
+    expect(r.verdict).toBe('VULNERABLE');
+  }, 60_000);
+
+  it('an unguarded drain of a hardcoded non-USDC token (zero USDC/ETH moved) stays critical and VULNERABLE', async () => {
+    const r = await engine.audit(`pragma solidity ^0.8.24;
+interface IERC20 { function transfer(address to, uint256 amount) external returns (bool); function balanceOf(address a) external view returns (uint256); }
+contract WethPot {
+    IERC20 constant WETH = IERC20(0x4200000000000000000000000000000000000006);
+    function sweep(address to) external { WETH.transfer(to, WETH.balanceOf(address(this))); }
+}`);
+    expect(r.address).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    const f = r.findings.find((x) => x.id === 'unprotected-withdraw');
+    expect(f?.severity).toBe('critical');
+    expect(f?.title).not.toMatch(/^Unconfirmed/);
+    expect(f?.confirmed).toBeUndefined();
+    expect(r.verdict).toBe('VULNERABLE');
   }, 60_000);
 
   it('deploys a 2-address-constructor draft (token + operator) and proves an open drain on it', async () => {
