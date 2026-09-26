@@ -8,7 +8,7 @@ import {
   DEFAULT_TRACK, DEFAULT_TRACK_ID, INCIDENT_LIMITS, MAX_CONCURRENT_RUNS, PARENT_ENS, RUN_COOLDOWN_PER_PHONE_SEC, skinFor,
   type ArenaEvent, type Car, type CarSpec, type CustomIncident, type Rating, type Stats, type TrackSpec,
 } from '@crumple/core';
-import { toPublic, type CarStore } from './public.js';
+import { publicTrack, toPublic, type CarStore } from './public.js';
 import { Bus } from './bus.js';
 import { Cooldown, RunQueue } from './queue.js';
 import { carId, randomSuffix, trackSlug, validateSpec, validateTrack, type SpecInput, type TrackInput } from './validate.js';
@@ -166,7 +166,7 @@ export async function buildApp(w: Wiring, store?: CarStore, opts: AppOptions = {
 
   app.get('/ws', { websocket: true }, (socket) => {
     const send = (e: ArenaEvent) => socket.readyState === 1 && socket.send(JSON.stringify(e));
-    send({ t: 'hello', cars: db.publicCars(12), queue: queue.ids(), integrations: w.integrations, tracks: db.tracks(HELLO_TRACKS), stats: stats() });
+    send({ t: 'hello', cars: db.publicCars(12), queue: queue.ids(), integrations: w.integrations, tracks: db.tracks(HELLO_TRACKS).map(publicTrack), stats: stats() });
     const off = bus.on(send);
     socket.on('close', off);
   });
@@ -185,11 +185,11 @@ export async function buildApp(w: Wiring, store?: CarStore, opts: AppOptions = {
   app.get('/api/cars', async () => ({ cars: db.publicCars() }));
 
   // ─── tracks ────────────────────────────────────────────────────────────────
-  app.get('/api/tracks', async () => ({ tracks: db.tracks() }));
+  app.get('/api/tracks', async () => ({ tracks: db.tracks().map(publicTrack) }));
   app.get<{ Params: { id: string } }>('/api/tracks/:id', async (req, reply) => {
     const track = db.getTrack(req.params.id);
     if (!track) return reply.code(404).send({ error: 'no such track' });
-    return { track };
+    return { track: publicTrack(track) };
   });
   app.post('/api/tracks', async (req, reply) => {
     const t = validateTrack((req.body ?? {}) as TrackInput, (id) => db.getIncident(id));
@@ -204,9 +204,10 @@ export async function buildApp(w: Wiring, store?: CarStore, opts: AppOptions = {
     while (db.getTrack(id)) id = `${base.slice(0, 27)}-${randomSuffix()}`;
     const track: TrackSpec = { id, ...t, createdAt: Date.now() };
     db.putTrack(track);
-    bus.emit({ t: 'track.created', track });
+    // Clients get the slim view; the full snapshot stays in the store for startRun / the report.
+    bus.emit({ t: 'track.created', track: publicTrack(track) });
     emitStats();
-    return reply.code(201).send({ track });
+    return reply.code(201).send({ track: publicTrack(track) });
   });
 
   // ─── custom incidents ──────────────────────────────────────────────────────

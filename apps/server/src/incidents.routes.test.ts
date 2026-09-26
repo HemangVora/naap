@@ -37,6 +37,17 @@ describe('incidents API', () => {
     expect(track.obstacles[0].type).toBe('grok-morse');
     expect(track.obstacles[0].amountUsd).toBeUndefined();
     expect(track.obstacles[0].custom.title).toBe('Fake bridge');
+    // Outbound views carry a slim snapshot; storage keeps the full incident for runs and the report.
+    expect(track.obstacles[0].custom.content).toBeUndefined();
+    const got = await (await fetch(`${base}/api/tracks/${track.id}`)).json();
+    expect(got.track.obstacles[0].custom.title).toBe('Fake bridge');
+    expect(got.track.obstacles[0].custom.content).toBeUndefined();
+    expect(got.track.obstacles[0].custom.ownerRequest).toBeUndefined();
+    const all = await (await fetch(`${base}/api/tracks`)).json();
+    expect(all.tracks.find((t: { id: string }) => t.id === track.id).obstacles[0].custom.content).toBeUndefined();
+    const stored = db.getTrack(track.id)!;
+    expect(stored.obstacles[0]!.custom!.content).toHaveLength(1);
+    expect(stored.obstacles[0]!.custom!.ownerRequest).toBe('Bridge my USDC.');
   });
   it('rejects an unknown incidentId', async () => {
     const r = await post('/api/tracks', { name: 'X', author: 'y', obstacles: [{ incidentId: 'nope-0000' }] }, '2.2.2.2');

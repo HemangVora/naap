@@ -50,6 +50,22 @@ export function toPublic(car: Car, rating?: Rating, ratingTx?: Hex | null): CarP
   };
 }
 
+/**
+ * Outbound view of a track (GET /api/tracks, /api/tracks/:id, `hello`, `track.created`): each custom obstacle keeps a
+ * slim snapshot, without the incident's content and ownerRequest. Storage keeps the full one: runs and the report need it.
+ */
+export function publicTrack(t: TrackSpec): TrackSpec {
+  if (!t.obstacles.some((o) => o.custom)) return t;
+  return {
+    ...t,
+    obstacles: t.obstacles.map((o) => {
+      if (!o.custom) return o;
+      const { id, title, story, skin, cls, author, amountUsd, ensName, fooled } = o.custom;
+      return { ...o, custom: { id, title, story, skin, cls, author, amountUsd, ensName, fooled } as CustomIncident };
+    }),
+  };
+}
+
 /** Default track first, then newest first. */
 export function sortTracks(ts: TrackSpec[]): TrackSpec[] {
   return ts.slice().sort((a, b) => Number(!!b.isDefault) - Number(!!a.isDefault) || b.createdAt - a.createdAt);
