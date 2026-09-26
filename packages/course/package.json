@@ -1,0 +1,9 @@
+{
+  "name": "@crumple/course",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "@crumple/core": "workspace:*", "@anthropic-ai/sdk": "^0.128.0", "@typesafe-ai/sdk": "^0.6.0", "openai": "^5.0.0" }
+}

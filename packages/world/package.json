@@ -1,0 +1,9 @@
+{
+  "name": "@crumple/world",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "@crumple/core": "workspace:*", "jose": "^5.9.0" }
+}

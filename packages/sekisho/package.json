@@ -1,0 +1,9 @@
+{
+  "name": "@crumple/sekisho",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "@crumple/core": "workspace:*", "@anthropic-ai/sdk": "^0.128.0", "viem": "^2.56.0" }
+}

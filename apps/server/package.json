@@ -1,0 +1,23 @@
+{
+  "name": "@crumple/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@crumple/core": "workspace:*",
+    "@crumple/sekisho": "workspace:*",
+    "@crumple/ens": "workspace:*",
+    "@crumple/world": "workspace:*",
+    "@crumple/intercepta": "workspace:*",
+    "@crumple/chain": "workspace:*",
+    "@crumple/course": "workspace:*",
+    "fastify": "^5.0.0",
+    "@fastify/websocket": "^11.0.0",
+    "@fastify/static": "^8.0.0"
+  }
+}
