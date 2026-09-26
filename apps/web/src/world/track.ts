@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { BarrierId, TrackSpec } from '../types';
-import { ATTACK_TYPES, BARRIER_INCIDENT } from '../types';
+import { ATTACK_TYPES } from '../types';
+import { obstacleTitle } from '../incidents';
 import { Barrier, Gate, SoftTarget } from '../arena/fixtures';
 import { asphaltTexture, dashTexture, drawCounter, gantryTexture, kerbTexture, roadNameTexture, grassTexture } from './tex';
 import { buildProp } from './props';
@@ -49,6 +50,8 @@ export interface Slot {
 
 interface Counter {
   type: BarrierId;
+  /** Sign label: the preset name, or a custom incident's title. */
+  title: string;
   sprite: THREE.Sprite;
   canvas: HTMLCanvasElement;
   tex: THREE.CanvasTexture;
@@ -158,7 +161,8 @@ export class TrackView {
         const c = document.createElement('canvas');
         c.width = 512;
         c.height = 136;
-        drawCounter(c, BARRIER_INCIDENT[ob.type], 0, 0);
+        const title = obstacleTitle(ob);
+        drawCounter(c, title, 0, 0);
         const tex = new THREE.CanvasTexture(c);
         tex.colorSpace = THREE.SRGBColorSpace;
         const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, toneMapped: false }));
@@ -167,7 +171,7 @@ export class TrackView {
         sprite.position.set(this.stationX(i) + 2, ob.type === 'freysa' ? 12.4 : 10.4, PROP_Z);
         sprite.renderOrder = 8;
         g.add(sprite);
-        this.counters.push({ type: ob.type, sprite, canvas: c, tex, last: '', step: i });
+        this.counters.push({ type: ob.type, title, sprite, canvas: c, tex, last: '', step: i });
       }
     });
   }
@@ -194,7 +198,7 @@ export class TrackView {
       const key = `${a.fooled}/${a.attempts}`;
       if (key === c.last) continue;
       c.last = key;
-      drawCounter(c.canvas, BARRIER_INCIDENT[c.type], a.fooled, a.attempts);
+      drawCounter(c.canvas, c.title, a.fooled, a.attempts);
       c.tex.needsUpdate = true;
     }
   }

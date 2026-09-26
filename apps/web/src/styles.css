@@ -363,5 +363,43 @@ body.phone-body { overflow: auto; }
 .tb-ok .by { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .tb-done a.primary { text-align: center; text-decoration: none; display: block; }
 .tb-done a.secondary { text-align: center; color: var(--text); font-size: 20px; font-weight: 700; padding: 12px; border: 2px solid var(--concrete); border-radius: 10px; text-decoration: none; }
+.tb-ok-steps { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-family: var(--mono); font-size: 12px; }
+.tb-ok-steps li { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.tb-ok-steps .n { color: var(--muted); width: 14px; flex: none; }
+.tb-ok-steps b { font-weight: 400; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tb-ok-steps small { color: var(--muted); font-size: 11px; white-space: nowrap; }
+
+/* ─── write your own incident ─── */
+.tb-write { display: flex; flex-direction: column; gap: 8px; }
+.tb-write textarea { min-height: 88px; font-size: 15px; padding: 12px; }
+.tb-gen { min-height: 48px; border-radius: 8px; border: 2px solid var(--yellow); background: transparent; color: var(--yellow); font-size: 19px; font-weight: 800; letter-spacing: 0.04em; width: 100%; cursor: pointer; }
+.tb-gen:disabled { opacity: 0.6; cursor: default; }
+.tb-gen:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
+.tb-draft[hidden], .field[hidden] { display: none; }
+.tb-draft { background: var(--concrete-2); border: 2px solid var(--concrete); border-left: 5px solid var(--tc); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.tb-draft .dh { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-family: var(--mono); font-size: 11px; }
+.tb-draft .tag { color: var(--tc); font-weight: 700; letter-spacing: 0.12em; }
+.tb-draft .amt { color: var(--muted); }
+.tb-draft .lbl { display: flex; flex-direction: column; gap: 4px; }
+.tb-draft .lbl > span { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.tb-draft .lbl input { padding: 10px 12px; font-size: 15px; background: var(--charcoal); }
+.tb-msgs { display: flex; flex-direction: column; gap: 6px; }
+.tb-msg { background: var(--charcoal); border: 1px solid var(--concrete); border-radius: 6px; padding: 8px 10px; }
+.tb-msg.payload { border-color: var(--tc); }
+.tb-msg small { display: block; font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.06em; margin-bottom: 4px; }
+.tb-msg p { margin: 0; font-family: var(--mono); font-size: 12px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tb-msg .ph { display: inline; font-size: 10px; line-height: 1.4; padding: 1px 5px; border-radius: 4px; color: var(--vermilion); background: rgba(226, 65, 43, 0.14); border: 1px solid var(--vermilion); letter-spacing: 0.06em; vertical-align: 1px; }
+.tb-draft .btns { display: grid; grid-template-columns: 1fr 1.5fr; gap: 8px; }
+.tb-draft .btns button { min-height: 46px; border-radius: 8px; border: 2px solid var(--concrete); background: transparent; color: var(--text); font-size: 18px; font-weight: 700; cursor: pointer; }
+.tb-draft .btns .pub { background: var(--yellow); border-color: var(--yellow); color: var(--charcoal); font-weight: 800; }
+.tb-draft .btns button:disabled { opacity: 0.6; cursor: default; }
+.tb-com { cursor: default; }
+.tb-com:active { transform: none; }
+.tb-com .tx small a { color: var(--tc); }
+.tb-com button.add { border: 0; background: transparent; cursor: pointer; padding: 10px 0 10px 10px; min-height: 44px; }
+.tb-com button.add:disabled { opacity: 0.5; }
+.tb-com button.add:focus-visible { outline: 2px solid var(--tc); outline-offset: 2px; border-radius: 4px; }
+.tb-story { font-family: var(--mono); font-size: 11px; color: var(--muted); line-height: 1.4; margin: -4px 0 0 24px; }
+.tb-knobs .ro { font-family: var(--mono); font-size: 13px; color: var(--text); }
 .tb .back a { color: var(--muted); font-family: var(--mono); font-size: 12px; }
 .world .empty-track { top: 74%; }

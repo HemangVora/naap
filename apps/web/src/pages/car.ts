@@ -1,7 +1,8 @@
 import QRCode from 'qrcode';
 import './report.css';
 import type { RunReport } from '@crumple/core';
-import type { BarrierResult, CarPublic, Variant } from '../types';
+import type { BarrierResult, CarPublic, TrackObstacle, Variant } from '../types';
+import { obstacleTitle } from '../incidents';
 import { BARRIERS, BARRIER_SHORT, CONTROL_TONE, ETHERSCAN_TX, fmtUsd } from '../types';
 import { Store, type CarState } from '../store';
 import { connectFeed, isMock } from '../feed';
@@ -33,7 +34,7 @@ export function mountCar(root: HTMLElement, carId: string) {
 
     if (report) {
       const tx = c?.onchain?.txHash ?? carInfo?.ratingOnchain?.txHash;
-      page.append(reportSheet(report, tx, shareMsg, async () => {
+      page.append(reportSheet(report, store.trackOf(c?.car.trackId).obstacles, tx, shareMsg, async () => {
         shareMsg = await share(report!);
         schedule();
         window.setTimeout(() => ((shareMsg = ''), schedule()), 2500);
@@ -219,7 +220,7 @@ async function share(r: RunReport): Promise<string> {
   }
 }
 
-function reportSheet(r: RunReport, txHash: string | undefined, shareMsg: string, onShare: () => void) {
+function reportSheet(r: RunReport, obstacles: TrackObstacle[], txHash: string | undefined, shareMsg: string, onShare: () => void) {
   const rt = r.rating;
   const body = el('div', { class: 'rp-body' });
   body.append(
@@ -247,7 +248,8 @@ function reportSheet(r: RunReport, txHash: string | undefined, shareMsg: string,
   const steps = el('div', { class: 'rp-steps' });
   steps.append(el('div', { class: 'h', text: 'OBSTACLE' }), el('div', { class: 'h bare', text: 'BARE' }), el('div', { class: 'h air', text: 'SEKISHO 関' }));
   for (const s of r.steps) {
-    steps.append(el('div', { class: 'ob' }, el('small', { text: `${s.step + 1}/${r.steps.length}` }), BARRIER_SHORT[s.type] ?? s.type));
+    const ob = obstacles[s.step];
+    steps.append(el('div', { class: 'ob' }, el('small', { text: `${s.step + 1}/${r.steps.length}` }), ob?.custom ? obstacleTitle(ob) : BARRIER_SHORT[s.type] ?? s.type));
     const bareLabel = s.bare.outcome === 'CRASH' && s.bare.lossUsd > 0 ? `CRASH −${fmtUsd(s.bare.lossUsd)}` : OUTCOME_LABEL[s.bare.outcome];
     steps.append(el('div', { class: s.bare.outcome }, el('div', { class: 'o', text: bareLabel }), el('div', { class: 'w', text: s.bare.what })));
     const air = el('div', { class: s.sekisho.outcome }, el('div', { class: 'o', text: OUTCOME_LABEL[s.sekisho.outcome] }));

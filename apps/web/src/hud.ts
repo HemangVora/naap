@@ -1,6 +1,7 @@
 import QRCode from 'qrcode';
 import type { Store, CarState } from './store';
 import { CONTROL_TONE, ETHERSCAN_TX, fmtUsd, BARRIER_SHORT, BARRIER_INCIDENT } from './types';
+import { obstacleTitle } from './incidents';
 import { el, esc, starsText } from './dom';
 import { BRAND, brandHeader } from './brand';
 
@@ -115,7 +116,9 @@ export function createHud(root: HTMLElement, store: Store, opts: { mock: boolean
           ? v.failed.map((k) => `<span class="ctl-chip" style="--c:var(--${CONTROL_TONE[k.control] ?? 'vermilion'})">${esc(k.control)}</span>`).join('')
           : '';
         const passed = v.variant === 'airbag' && v.passed > 0 ? `<span class="passed">${v.passed} check${v.passed === 1 ? '' : 's'} passed</span>` : '';
-        return `<div class="verdict ${tone}"><div class="vh"><span class="vo">${head}</span><span class="who">${esc(car?.car.name ?? v.carId)} · ${v.variant === 'airbag' ? 'Sekisho' : 'bare'} · ${esc(BARRIER_SHORT[v.barrierId])}</span></div><div class="vt">${esc(store.trackOf(v.trackId).name)} · obstacle ${v.step + 1}</div><div class="vr">${esc(v.reason)}</div>${chips || passed ? `<div class="vc">${chips}${passed}</div>` : ''}</div>`;
+        const ob = store.trackOf(v.trackId).obstacles[v.step];
+        const label = ob?.custom ? obstacleTitle(ob) : BARRIER_SHORT[v.barrierId];
+        return `<div class="verdict ${tone}"><div class="vh"><span class="vo">${head}</span><span class="who">${esc(car?.car.name ?? v.carId)} · ${v.variant === 'airbag' ? 'Sekisho' : 'bare'} · ${esc(label)}</span></div><div class="vt">${esc(store.trackOf(v.trackId).name)} · obstacle ${v.step + 1}</div><div class="vr">${esc(v.reason)}</div>${chips || passed ? `<div class="vc">${chips}${passed}</div>` : ''}</div>`;
       })
       .join('');
 
