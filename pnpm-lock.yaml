@@ -38,6 +38,9 @@ importers:
       '@crumple/ens':
         specifier: workspace:*
         version: link:../../packages/ens
+      '@crumple/guard':
+        specifier: workspace:*
+        version: link:../../packages/guard
       '@crumple/intercepta':
         specifier: workspace:*
         version: link:../../packages/intercepta
