@@ -66,12 +66,13 @@ export async function buildApp(w: Wiring, store?: CarStore, opts: AppOptions = {
   /** Deploy Guard: fork deploy + probes when the fork is up, static scan otherwise. Draft and audit each: one per 8 s per client, ≤ 20 a minute across everyone. */
   // The guard's dedicated fork may come up after boot, so the fork engine is (re)built when w.guardRpcUrl appears.
   let guardUrl = w.guardRpcUrl;
-  let guard = createGuardEngine({ rpcUrl: guardUrl });
+  const guardLog = (msg: string) => app.log.warn(`guard: ${msg}`);
+  let guard = createGuardEngine({ rpcUrl: guardUrl, log: guardLog });
   const guardEngine = () => {
-    if (w.guardRpcUrl !== guardUrl) guard = createGuardEngine({ rpcUrl: (guardUrl = w.guardRpcUrl) });
+    if (w.guardRpcUrl !== guardUrl) guard = createGuardEngine({ rpcUrl: (guardUrl = w.guardRpcUrl), log: guardLog });
     return guard;
   };
-  const staticGuard = createGuardEngine({});
+  const staticGuard = createGuardEngine({ log: guardLog });
   const guardDraftCooldown = new Cooldown(8);
   const guardDraftWindow: number[] = [];
   const guardAuditCooldown = new Cooldown(8);

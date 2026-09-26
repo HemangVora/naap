@@ -1,7 +1,7 @@
 // Deploy Guard: the contract drafter (spec 2026-09-27-deploy-guard-design.md). An LLM writes the contract a visitor
 // asks for with a neutral "build this feature" prompt — accidental flaws are the point, never requested ones — and
 // anything that is not one usable single-file contract falls back to the closest preset.
-import { GUARD_PRESETS, contractNameOf, type GuardPreset } from '@crumple/guard';
+import { GUARD_PRESETS, contractNameOf, stripComments, type GuardPreset } from '@crumple/guard';
 import type { DraftLlm } from './incidents.js';
 
 export const GUARD_LIMITS = { promptMax: 600, sourceMaxBytes: 12 * 1024 } as const;
@@ -9,12 +9,15 @@ export const GUARD_LIMITS = { promptMax: 600, sourceMaxBytes: 12 * 1024 } as con
 export interface ContractDraft {
   source: string;
   name: string;
+  /** Set when the model gave nothing usable (no key, refusal, timeout, prose) and this is the closest preset. */
+  preset?: true;
 }
 
 const SYSTEM = `You are a Solidity developer. Build the smart contract feature the user describes.
 Return ONLY the Solidity source code of one self-contained file, nothing else — no explanation, no markdown:
 - start with "// SPDX-License-Identifier: MIT" then "pragma solidity ^0.8.24;"
 - exactly one contract; no imports and no external libraries (declare a minimal interface inline if you need a token such as IERC20)
+- prefer a constructor with no arguments, or a single token address argument
 - keep it short: at most 80 lines, brief comments only.`;
 
 const WORD = /[a-z0-9]+/g;
@@ -34,7 +37,7 @@ export function closestPreset(prompt: string): GuardPreset {
   return best;
 }
 
-const fromPreset = (p: GuardPreset): ContractDraft => ({ source: p.source, name: contractNameOf(p.source) });
+const fromPreset = (p: GuardPreset): ContractDraft => ({ source: p.source, name: contractNameOf(p.source), preset: true });
 
 /**
  * One usable single-file contract from raw model output, or null. Strips ``` fences and surrounding prose, forces the
@@ -49,7 +52,8 @@ export function cleanContract(raw: string): string | null {
   const end = s.lastIndexOf('}');
   if (start < 0 || end < start) return null;
   s = s.slice(start, end + 1).replace(/pragma\s+solidity\s+[^;]*;/, 'pragma solidity ^0.8.24;').trim() + '\n';
-  if (!/pragma\s+solidity/.test(s) || !/\bcontract\s+\w+/.test(s)) return null;
+  // comments stripped first: "// a simple contract for tipping" is not a contract definition
+  if (!/pragma\s+solidity/.test(s) || !/\bcontract\s+\w+/.test(stripComments(s))) return null;
   if (/^\s*import\b/m.test(s)) return null;
   if (Buffer.byteLength(s, 'utf8') > GUARD_LIMITS.sourceMaxBytes) return null;
   let depth = 0;

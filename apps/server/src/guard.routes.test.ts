@@ -5,7 +5,7 @@ import { GUARD_PRESETS } from '@crumple/guard';
 import { buildApp } from './app.js';
 import { MemoryStore } from './public.js';
 import { fakeWiring } from './test-wiring.js';
-import { cleanContract, closestPreset } from './guard.js';
+import { cleanContract, closestPreset, draftContract } from './guard.js';
 
 const DRAFTED = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
@@ -50,6 +50,7 @@ describe('guard API', () => {
     expect(d.source).toContain('pragma solidity ^0.8.24;');
     expect(d.source).not.toContain('```');
     expect(d.source).not.toContain('Let me know');
+    expect(d.preset).toBeUndefined();
     const last = calls.at(-1)!;
     expect(last.user).toContain('a tip jar for my stream');
     expect(`${last.system} ${last.user}`.toLowerCase()).not.toMatch(/vulnerab|exploit|insecure|backdoor/);
@@ -61,6 +62,8 @@ describe('guard API', () => {
       const d = await (await post('/api/guard/draft', { prompt: 'a price oracle for my lending market' }, '20.0.0.2')).json();
       expect(d.source).toBe(GUARD_PRESETS.find((p) => p.id === 'naive-oracle')!.source);
       expect(d.source).toContain('contract');
+      expect(d.preset).toBe(true);
+      expect(d.name).toBe('LendingOracle');
     } finally {
       llmOut = async () => DRAFTED;
     }
@@ -72,6 +75,7 @@ describe('guard API', () => {
       const d = await (await post('/api/guard/draft', { prompt: 'a reward token with a faucet' }, '20.0.0.3')).json();
       expect(d.source).toBe(GUARD_PRESETS.find((p) => p.id === 'faucet-token')!.source);
       expect(d.name).toBe('RewardToken');
+      expect(d.preset).toBe(true);
     } finally {
       llmOut = async () => DRAFTED;
     }
@@ -154,6 +158,13 @@ describe('cleanContract / closestPreset', () => {
     expect(cleanContract(`pragma solidity ^0.8.24;\nimport "./x.sol";\ncontract A {}`)).toBeNull();
     expect(cleanContract(`pragma solidity ^0.8.24;\ncontract A {\n  function f() external {\n`)).toBeNull();
     expect(cleanContract(`pragma solidity ^0.8.24;\ninterface I { function f() external; }`)).toBeNull();
+  });
+  it('never takes a word from a comment as the contract (name or existence)', async () => {
+    expect(cleanContract(`// A simple contract for tipping\npragma solidity ^0.8.24;\ninterface I { function f() external; }`)).toBeNull();
+    const d = await draftContract('a tip jar', async () => `// SPDX-License-Identifier: MIT\n// A simple contract for tipping\npragma solidity ^0.8.24;\n/* contract Old */\ncontract TipJar {\n    function tip() external payable {}\n}`);
+    expect(d.name).toBe('TipJar');
+    expect(d.preset).toBeUndefined();
+    expect(await draftContract('a tip jar')).toMatchObject({ preset: true }); // no LLM configured
   });
   it('picks the preset sharing the most words, else the first', () => {
     expect(closestPreset('only the owner can withdraw from my USDC vault').id).toBe('safe-vault');

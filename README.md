@@ -89,6 +89,7 @@ NODE_ENV=development pnpm --filter @crumple/server start   # starts the Base for
 
 - **Arena:** `/`. Demo loop without a server: `/?mock=1`.
 - **Phones:** `/join`. The presenter's car is `/join?owner=<OWNER_TOKEN>`.
+- **Deploy Guard:** `/guard`. On-chain proofs need `BASE_RPC_URL` and `anvil` on PATH: the server starts a second, dedicated anvil fork for the guard (separate from the car/payment fork). Without them the guard is static-only (scan + compile, no deploy, no proof tx), and the server logs why.
 - **Tests:** `pnpm test` (185 tests) and `pnpm typecheck`.
 - **One-time ENS setup:** `pnpm --filter @crumple/ens register`, then `seed-payee`, then `prove-eac`.
 

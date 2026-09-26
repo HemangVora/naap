@@ -77,7 +77,10 @@ async function chainOrFake(): Promise<{ chain: Chain; fork?: ForkHandle; live: b
  * evm_snapshot/evm_revert must not touch the car fork. Resolves undefined when there is no upstream or it fails to start.
  */
 function startGuardFork(onReady: (rpcUrl: string) => void): Promise<ForkHandle | undefined> {
-  if (!process.env.BASE_RPC_URL) return Promise.resolve(undefined);
+  if (!process.env.BASE_RPC_URL) {
+    log('BASE_RPC_URL missing → Deploy Guard is static-only (no sandbox deploy, no proof tx)');
+    return Promise.resolve(undefined);
+  }
   return startFork({ port: 0, log }).then(
     (f) => {
       log(`guard fork up at ${f.rpcUrl}`);
