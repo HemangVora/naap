@@ -1,15 +1,18 @@
 import * as THREE from 'three';
-import { PALETTE, BARRIERS, BARRIER_LABEL } from '../types';
-import { checkerTexture, floorTexture, hazardTexture, stencilTexture } from './textures';
+import { BARRIERS, BARRIER_LABEL } from '../types';
+import { checkerTexture, floorTexture, hazardTexture, laneLabelTexture, signTexture, stencilTexture, tickTexture } from './textures';
+import { BRAND } from '../brand';
 
+// Track runs along +x (screen left → right). Slots stack into depth along −z; the camera sits on +z.
 export const STATION_X = [0, 22, 44, 66, 88];
-export const START_X = -20;
-export const END_X = 108;
-export const SLOT_DZ = 7.2; // distance between lane pairs
-export const LANE_DZ = 3.2; // bare lane sits this far behind the airbag lane
+export const START_X = -18;
+export const END_X = 104;
+export const SLOT_DZ = 7.4; // distance between lane pairs
+export const LANE_DZ = 3.2; // bare lane sits this far behind (−z) the sekisho lane
 export const MAX_SLOTS = 6;
-export const slotZ = (slot: number) => slot * SLOT_DZ;
-export const laneZ = (slot: number, variant: 'bare' | 'airbag') => slotZ(slot) + (variant === 'bare' ? LANE_DZ : 0);
+export const slotZ = (slot: number) => -slot * SLOT_DZ;
+export const laneZ = (slot: number, variant: 'bare' | 'airbag') => slotZ(slot) - (variant === 'bare' ? LANE_DZ : 0);
+export const HALL_BG = '#dfe2e4';
 
 const SUB: Record<string, string> = {
   legit: 'weather.crumple.eth · $1.00',
@@ -19,112 +22,141 @@ const SUB: Record<string, string> = {
   'over-limit': '$40 · cap $5 · World',
 };
 
-/** Builds the static hall: floor, walls, strip lights, checkerboards, station labels, fog. */
+/** Bright NCAP hall: pale epoxy floor, white lane lines, metre ticks, floodlight banks, checkerboards, cable channels. */
 export function buildHall(scene: THREE.Scene) {
-  scene.background = new THREE.Color(PALETTE.charcoal);
-  scene.fog = new THREE.FogExp2(PALETTE.charcoal, 0.011);
+  scene.background = new THREE.Color(HALL_BG);
+  scene.fog = new THREE.Fog(HALL_BG, 260, 900);
 
-  // floor
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(320, 160), new THREE.MeshStandardMaterial({ map: floorTexture(), roughness: 0.95, metalness: 0 }));
+  const wallZ = slotZ(MAX_SLOTS - 1) - LANE_DZ - 9;
+  const midZ = (wallZ + 8) / 2;
+  const depth = 8 - wallZ + 40;
+
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(360, 200), new THREE.MeshStandardMaterial({ map: floorTexture(), roughness: 0.85, metalness: 0 }));
   floor.rotation.x = -Math.PI / 2;
-  floor.position.set(44, 0, 20);
+  floor.position.set(44, 0, midZ);
   floor.receiveShadow = true;
   scene.add(floor);
 
-  // lane guide lines (thin yellow) for each of the 12 lanes
-  const lineMat = new THREE.MeshBasicMaterial({ color: 0x3a3a2a });
+  const lineMat = new THREE.MeshBasicMaterial({ color: 0xf4f4f0 });
+  const cableMat = new THREE.MeshBasicMaterial({ color: 0x3b3d42 });
+  const tickMat = new THREE.MeshBasicMaterial({ map: tickTexture(), transparent: true, depthWrite: false });
+  const len = END_X - START_X + 12;
+  const cx = (START_X + END_X) / 2;
+  const lineGeo = new THREE.PlaneGeometry(len, 0.08);
+  const tickGeo = new THREE.PlaneGeometry(len, 0.5);
+  const uv = tickGeo.attributes.uv as THREE.BufferAttribute;
+  for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * len); // one tick per metre
+  const bareLabel = new THREE.MeshBasicMaterial({ map: laneLabelTexture('BARE · NO PROTECTION', 'bare'), transparent: true, depthWrite: false });
+  const sekLabel = new THREE.MeshBasicMaterial({ map: laneLabelTexture('SEKISHO · AIRBAG', 'sekisho'), transparent: true, depthWrite: false });
+  const labelGeo = new THREE.PlaneGeometry(8, 1.25);
   for (let s = 0; s < MAX_SLOTS; s++) {
     for (const v of ['bare', 'airbag'] as const) {
       const z = laneZ(s, v);
-      const l = new THREE.Mesh(new THREE.PlaneGeometry(END_X - START_X + 10, 0.06), lineMat);
-      l.rotation.x = -Math.PI / 2;
-      l.position.set((START_X + END_X) / 2, 0.005, z - 1.55);
-      scene.add(l);
-      const r = l.clone();
-      r.position.z = z + 1.55;
-      scene.add(r);
+      const label = new THREE.Mesh(labelGeo, v === 'bare' ? bareLabel : sekLabel);
+      label.rotation.x = -Math.PI / 2;
+      label.position.set(START_X - 3, 0.012, z);
+      scene.add(label);
+      for (const dz of [-1.55, 1.55]) {
+        const l = new THREE.Mesh(lineGeo, lineMat);
+        l.rotation.x = -Math.PI / 2;
+        l.position.set(cx, 0.006, z + dz);
+        scene.add(l);
+      }
+      const cable = new THREE.Mesh(new THREE.PlaneGeometry(len, 0.05), cableMat);
+      cable.rotation.x = -Math.PI / 2;
+      cable.position.set(cx, 0.007, z);
+      scene.add(cable);
+      const ticks = new THREE.Mesh(tickGeo, tickMat);
+      ticks.rotation.x = -Math.PI / 2;
+      ticks.position.set(cx, 0.008, z + 1.3);
+      scene.add(ticks);
     }
   }
-  // start line, hazard
-  const startLine = new THREE.Mesh(new THREE.PlaneGeometry(1.2, MAX_SLOTS * SLOT_DZ + 4), new THREE.MeshBasicMaterial({ map: hazardTexture([1, 12]) }));
+
+  const spanZ = SLOT_DZ * MAX_SLOTS + 4;
+  const startLine = new THREE.Mesh(new THREE.PlaneGeometry(1.0, spanZ), new THREE.MeshBasicMaterial({ map: hazardTexture([1, 14]) }));
   startLine.rotation.x = -Math.PI / 2;
-  startLine.position.set(START_X + 3, 0.006, (MAX_SLOTS * SLOT_DZ) / 2 - 2);
+  startLine.position.set(START_X + 2, 0.009, midZ + 6);
   scene.add(startLine);
 
-  // station floor labels (big stencil type, nearest the camera and repeated far)
   BARRIERS.forEach((b, i) => {
     const t = stencilTexture(BARRIER_LABEL[b], SUB[b]);
     const mat = new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false });
-    const label = new THREE.Mesh(new THREE.PlaneGeometry(12, 4.5), mat);
-    label.rotation.set(-Math.PI / 2, 0, Math.PI);
-    label.position.set(STATION_X[i] - 0.5, 0.01, -6.2);
-    scene.add(label);
-    const far = label.clone();
-    far.position.z = MAX_SLOTS * SLOT_DZ + 2;
+    const near = new THREE.Mesh(new THREE.PlaneGeometry(12, 4.5), mat);
+    near.rotation.x = -Math.PI / 2;
+    near.position.set(STATION_X[i] - 1, 0.011, 5.6);
+    scene.add(near);
+    const far = near.clone();
+    far.position.z = wallZ + 5;
     scene.add(far);
-    // station stripe across the whole width
-    const stripe = new THREE.Mesh(new THREE.PlaneGeometry(0.5, MAX_SLOTS * SLOT_DZ + 12), new THREE.MeshBasicMaterial({ color: 0x2c2d33 }));
+    const stripe = new THREE.Mesh(new THREE.PlaneGeometry(0.35, spanZ + 8), new THREE.MeshBasicMaterial({ color: 0x8d9094 }));
     stripe.rotation.x = -Math.PI / 2;
-    stripe.position.set(STATION_X[i], 0.004, (MAX_SLOTS * SLOT_DZ) / 2 - 2);
+    stripe.position.set(STATION_X[i], 0.005, midZ + 4);
     scene.add(stripe);
   });
 
-  // back wall with calibration checkerboards
-  const wallZ = MAX_SLOTS * SLOT_DZ + 12;
-  const wall = new THREE.Mesh(new THREE.PlaneGeometry(320, 14), new THREE.MeshStandardMaterial({ color: 0x1f2126, roughness: 1 }));
-  wall.position.set(44, 7, wallZ);
-  wall.rotation.y = Math.PI;
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0xeeeeea, roughness: 1 });
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(360, 16), wallMat);
+  wall.position.set(44, 8, wallZ);
   scene.add(wall);
+  const sideWall = new THREE.Mesh(new THREE.PlaneGeometry(depth + 60, 16), wallMat);
+  sideWall.rotation.y = Math.PI / 2;
+  sideWall.position.set(START_X - 40, 8, midZ);
+  scene.add(sideWall);
   const checker = new THREE.MeshStandardMaterial({ map: checkerTexture(8), roughness: 1 });
-  for (let x = START_X; x < END_X + 10; x += 16) {
-    const panel = new THREE.Mesh(new THREE.PlaneGeometry(4, 4), checker);
-    panel.position.set(x, 4, wallZ - 0.05);
-    panel.rotation.y = Math.PI;
-    scene.add(panel);
+  for (const x of STATION_X) {
+    for (const dx of [-4.5, 4.5]) {
+      const panel = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 3.2), checker);
+      panel.position.set(x + dx, 2.4, wallZ + 0.05);
+      scene.add(panel);
+    }
+    const stand = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 3.2), checker);
+    stand.position.set(x + 6.5, 1.65, wallZ + 3);
+    scene.add(stand);
   }
-  // hazard skirting along the wall
-  const skirt = new THREE.Mesh(new THREE.PlaneGeometry(320, 0.7), new THREE.MeshBasicMaterial({ map: hazardTexture([80, 1]) }));
-  skirt.position.set(44, 0.35, wallZ - 0.06);
-  skirt.rotation.y = Math.PI;
+  const signMat = new THREE.MeshBasicMaterial({ map: signTexture(BRAND.name, BRAND.long) });
+  for (const x of [STATION_X[1], STATION_X[3]]) {
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(16, 4), signMat);
+    sign.position.set(x + 11, 6.4, wallZ + 0.08);
+    scene.add(sign);
+  }
+  const skirt = new THREE.Mesh(new THREE.PlaneGeometry(360, 0.5), new THREE.MeshBasicMaterial({ map: hazardTexture([90, 1]) }));
+  skirt.position.set(44, 0.25, wallZ + 0.06);
   scene.add(skirt);
 
-  // overhead strip lights (emissive, cool)
-  const stripGeo = new THREE.BoxGeometry(6, 0.12, 0.5);
-  const stripMat = new THREE.MeshStandardMaterial({ color: 0xdfe8ff, emissive: 0xcfe0ff, emissiveIntensity: 2.6 });
-  for (let x = START_X; x <= END_X; x += 11) {
-    for (let z = -4; z < wallZ; z += 14) {
-      const s = new THREE.Mesh(stripGeo, stripMat);
-      s.position.set(x, 10.5, z);
-      scene.add(s);
+  const bankGeo = new THREE.BoxGeometry(7, 0.25, 2.2);
+  const bankMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1.6 });
+  const trussMat = new THREE.MeshStandardMaterial({ color: 0x9a9da3, roughness: 0.6, metalness: 0.6 });
+  for (let x = START_X - 6; x <= END_X + 6; x += 12) {
+    for (let z = 6; z > wallZ; z -= 9) {
+      const bank = new THREE.Mesh(bankGeo, bankMat);
+      bank.position.set(x, 12.5, z);
+      bank.layers.set(1); // ceiling is seen by the side-on high-speed cam only; the gantry shot looks down through it
+      scene.add(bank);
     }
-  }
-  // gantry beams
-  const beamMat = new THREE.MeshStandardMaterial({ color: 0x3a3d44, roughness: 0.7, metalness: 0.5 });
-  for (let x = START_X; x <= END_X; x += 22) {
-    const beam = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, wallZ + 12), beamMat);
-    beam.position.set(x + 11, 12.2, wallZ / 2 - 6);
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, depth + 30), trussMat);
+    beam.position.set(x, 13.2, midZ);
+    beam.layers.set(1);
     scene.add(beam);
   }
 
-  // lights: cool overhead + hemisphere fill, one shadow-casting key
-  scene.add(new THREE.HemisphereLight(0x9fb8ff, 0x0d0e11, 0.55));
-  const key = new THREE.DirectionalLight(0xdbe6ff, 1.9);
-  key.position.set(20, 30, -18);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xb7bab6, 1.35));
+  const key = new THREE.DirectionalLight(0xffffff, 2.4);
+  key.position.set(30, 40, 30);
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
   key.shadow.camera.near = 5;
-  key.shadow.camera.far = 90;
-  key.shadow.camera.left = -40;
-  key.shadow.camera.right = 40;
-  key.shadow.camera.top = 40;
-  key.shadow.camera.bottom = -40;
-  key.shadow.bias = -0.0005;
-  key.shadow.normalBias = 0.02;
-  scene.add(key);
-  scene.add(key.target);
-  const rim = new THREE.DirectionalLight(0xe2412b, 0.35);
-  rim.position.set(-30, 8, 40);
-  scene.add(rim);
+  key.shadow.camera.far = 140;
+  key.shadow.camera.left = -60;
+  key.shadow.camera.right = 60;
+  key.shadow.camera.top = 60;
+  key.shadow.camera.bottom = -60;
+  key.shadow.bias = -0.0004;
+  key.shadow.normalBias = 0.03;
+  scene.add(key, key.target);
+  const fill = new THREE.DirectionalLight(0xe8f0ff, 0.9);
+  fill.position.set(-40, 25, -30);
+  scene.add(fill);
 
-  return { key };
+  return { key, wallZ };
 }

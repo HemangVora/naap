@@ -6,3 +6,4 @@ dist/
 *.sqlite
 *.sqlite-*
 .DS_Store
+apps/web/ref/

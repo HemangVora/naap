@@ -2,14 +2,15 @@ import QRCode from 'qrcode';
 import type { Store, CarState } from './store';
 import { CONTROL_TONE, ETHERSCAN_TX, fmtUsd, BARRIER_SHORT } from './types';
 import { el, esc, starsText } from './dom';
+import { BRAND, brandHeader } from './brand';
 
-const KIND: Record<string, string> = { built: 'built', webhook: 'webhook', openai: 'openai' };
+const KIND: Record<string, string> = { built: 'built', webhook: 'webhook', openai: 'openai', mcp: 'your agent · MCP' };
 
 export function createHud(root: HTMLElement, store: Store, opts: { mock: boolean }) {
   const hud = el('div', { class: 'hud' });
 
   // top
-  const wordmark = el('div', { class: 'wordmark' }, el('div', { class: 'roundel' }), el('div', {}, el('h1', { text: 'CRUMPLE' }), el('small', { text: 'crash-test hall × sekisho 関所' })));
+  const wordmark = brandHeader(BRAND.arenaSub);
   const headline = el('div', { class: 'headline' });
   const pills = el('div', { class: 'pills' });
   const top = el('div', { class: 'hud-top' }, wordmark, headline, pills);

@@ -235,3 +235,29 @@ body.phone-body { overflow: auto; }
 .verdict .vc { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .verdict .ctl-chip { font-size: 10px; font-weight: 700; padding: 1px 6px; border: 1px solid var(--c); color: var(--c); border-radius: 3px; }
 .verdict .passed { font-size: 10px; color: var(--green); padding: 1px 0; }
+
+/* ─── v2: high-speed-cam inset (burned-in HUD over a scissor viewport) ─── */
+.hs-cam { position: absolute; left: 22px; bottom: 62px; width: 30vw; aspect-ratio: 16 / 9; pointer-events: none;
+  border: 2px solid rgba(21, 22, 26, 0.85); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35), inset 0 0 60px rgba(0, 0, 0, 0.25);
+  font-family: var(--mono); color: #f2efe8; text-shadow: 0 1px 0 #000, 0 0 6px rgba(0, 0, 0, 0.7); }
+.hs-cam::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, rgba(0,0,0,0.05) 0 1px, transparent 1px 3px); }
+.hs-cam::after { content: ''; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px;
+  border: 1px solid rgba(242, 239, 232, 0.55); border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,0.3); }
+.hs-top { position: absolute; left: 10px; top: 8px; font-size: 12px; letter-spacing: 0.08em; font-weight: 700; display: flex; align-items: center; gap: 7px; }
+.hs-top .rec { width: 9px; height: 9px; border-radius: 50%; background: var(--vermilion); animation: rec-blink 1s steps(1) infinite; }
+@keyframes rec-blink { 50% { opacity: 0.25; } }
+.hs-time { position: absolute; right: 10px; top: 8px; font-size: 20px; font-weight: 700; letter-spacing: 0.04em; }
+.hs-meta { position: absolute; left: 10px; bottom: 8px; font-size: 11px; color: #f2efe8; opacity: 0.95; max-width: 70%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hs-speed { position: absolute; right: 10px; bottom: 8px; font-size: 12px; font-weight: 700; color: var(--yellow); }
+.hud-bottom .legend { margin-left: 0; }
+.floater.readout { color: #15161a; font-family: var(--mono); font-size: 18px; font-weight: 700; background: rgba(242, 239, 232, 0.92); padding: 4px 10px; border-left: 4px solid var(--green);
+  text-shadow: none; animation: readout-in 3.2s ease-out forwards; }
+@keyframes readout-in { 0% { opacity: 0; transform: translate(-50%, -20%); } 8% { opacity: 1; transform: translate(-50%, -50%); } 85% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -80%); } }
+.flash.on { animation: flash-hit 260ms ease-out; }
+@keyframes flash-hit { 0% { opacity: 0.22; } 100% { opacity: 0; } }
+
+/* ─── NaAP brand header (arena + phones share the markup from brand.ts) ─── */
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-logo { width: 56px; height: 56px; flex: none; display: block; }
+.brand h1 { margin: 0; font-family: var(--display); font-size: 44px; line-height: 1; font-weight: 800; letter-spacing: 0.04em; }
+.brand small { display: block; font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.08em; margin-top: 2px; }

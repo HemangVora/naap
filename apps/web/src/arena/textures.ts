@@ -14,7 +14,7 @@ function canvas(w: number, h: number) {
 function tex(c: HTMLCanvasElement, opts: { repeat?: [number, number]; nearest?: boolean } = {}) {
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
+  t.anisotropy = 8;
   if (opts.repeat) {
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
     t.repeat.set(...opts.repeat);
@@ -44,42 +44,97 @@ export function hazardTexture(repeat: [number, number] = [1, 1]) {
   return tex(c, { repeat });
 }
 
-/** Calibration checkerboard (white/black) used on wall panels. */
+/** Calibration checkerboard (white/black). */
 export function checkerTexture(n = 8) {
   const [c, g] = canvas(256, 256);
   const s = 256 / n;
   for (let y = 0; y < n; y++)
     for (let x = 0; x < n; x++) {
-      g.fillStyle = (x + y) % 2 ? '#d8d5cc' : '#141519';
+      g.fillStyle = (x + y) % 2 ? '#f2f2ef' : '#141519';
       g.fillRect(x * s, y * s, s, s);
     }
   return tex(c, { nearest: true });
 }
 
-/** Dark concrete floor with faint grid + tyre scuffs. */
+/** Pale grey epoxy hall floor with faint grain and scuffs (NCAP halls are light, not dark). */
 export function floorTexture() {
   const [c, g] = canvas(512, 512);
-  g.fillStyle = '#17181c';
+  g.fillStyle = '#b4b6b3';
   g.fillRect(0, 0, 512, 512);
-  // grain
-  for (let i = 0; i < 9000; i++) {
-    g.fillStyle = `rgba(255,255,255,${Math.random() * 0.035})`;
+  for (let i = 0; i < 12000; i++) {
+    const v = Math.random();
+    g.fillStyle = v > 0.5 ? `rgba(255,255,255,${Math.random() * 0.08})` : `rgba(0,0,0,${Math.random() * 0.07})`;
     g.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
   }
-  g.strokeStyle = 'rgba(255,255,255,0.05)';
-  g.lineWidth = 2;
-  for (let i = 0; i <= 512; i += 128) {
+  g.strokeStyle = 'rgba(40,40,40,0.05)';
+  g.lineWidth = 6;
+  for (let i = 0; i < 14; i++) {
     g.beginPath();
-    g.moveTo(i, 0);
-    g.lineTo(i, 512);
-    g.moveTo(0, i);
-    g.lineTo(512, i);
+    const y = Math.random() * 512;
+    g.moveTo(0, y);
+    g.bezierCurveTo(170, y + 20, 340, y - 20, 512, y + 5);
     g.stroke();
   }
-  return tex(c, { repeat: [40, 20] });
+  return tex(c, { repeat: [48, 24] });
 }
 
-/** Crash-test roundel: yellow/black quarters. */
+/** Metre ticks along a lane edge (repeat once per metre). */
+export function tickTexture() {
+  const [c, g] = canvas(64, 64);
+  g.clearRect(0, 0, 64, 64);
+  g.fillStyle = 'rgba(30,30,32,0.55)';
+  g.fillRect(0, 0, 4, 64);
+  g.fillRect(32, 22, 3, 20);
+  return tex(c, { repeat: [1, 1] });
+}
+
+/** Deformable aluminium honeycomb face: silver with a slight yellow cast and a hex grid. */
+export function honeycombTexture() {
+  const [c, g] = canvas(256, 256);
+  g.fillStyle = '#d9d3b6';
+  g.fillRect(0, 0, 256, 256);
+  const r = 9;
+  const h = r * Math.sqrt(3);
+  g.strokeStyle = 'rgba(70,64,40,0.55)';
+  g.lineWidth = 1.4;
+  for (let row = -1; row < 256 / h + 2; row++) {
+    for (let col = -1; col < 256 / (1.5 * r) + 2; col++) {
+      const cx = col * 1.5 * r;
+      const cy = row * h + (col % 2 ? h / 2 : 0);
+      g.beginPath();
+      for (let k = 0; k < 6; k++) {
+        const a = (Math.PI / 3) * k;
+        const x = cx + r * Math.cos(a);
+        const y = cy + r * Math.sin(a);
+        if (k === 0) g.moveTo(x, y);
+        else g.lineTo(x, y);
+      }
+      g.closePath();
+      g.stroke();
+    }
+  }
+  const grad = g.createLinearGradient(0, 0, 256, 256);
+  grad.addColorStop(0, 'rgba(255,255,255,0.18)');
+  grad.addColorStop(0.5, 'rgba(255,255,255,0)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.12)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 256, 256);
+  return tex(c, { repeat: [2, 2] });
+}
+
+/** Yellow/black measuring-tape stripe that runs along the flank of every test car. */
+export function tapeTexture() {
+  const [c, g] = canvas(256, 32);
+  g.fillStyle = PALETTE.yellow;
+  g.fillRect(0, 0, 256, 32);
+  g.fillStyle = '#111';
+  for (let x = 0; x < 256; x += 32) g.fillRect(x, 0, 16, 32);
+  g.fillStyle = '#fff';
+  for (let x = 8; x < 256; x += 32) g.fillRect(x - 1, 10, 2, 12);
+  return tex(c, { repeat: [1, 1] });
+}
+
+/** Crash-test roundel: yellow/black quarters on a white ring. */
 export function roundelTexture() {
   const [c, g] = canvas(128, 128);
   g.clearRect(0, 0, 128, 128);
@@ -114,32 +169,107 @@ export function sekiBadgeTexture() {
   return tex(c);
 }
 
-/** Floor stencil label for a barrier station. */
+/** Shattered windscreen: transparent with white radial cracks. */
+export function crackTexture() {
+  const [c, g] = canvas(256, 128);
+  g.clearRect(0, 0, 256, 128);
+  g.fillStyle = 'rgba(210,225,235,0.28)';
+  g.fillRect(0, 0, 256, 128);
+  g.strokeStyle = 'rgba(255,255,255,0.85)';
+  g.lineWidth = 1.5;
+  for (const [cx, cy] of [
+    [80, 70],
+    [190, 55],
+  ]) {
+    for (let k = 0; k < 16; k++) {
+      const a = (Math.PI * 2 * k) / 16 + Math.random() * 0.3;
+      g.beginPath();
+      g.moveTo(cx, cy);
+      let x = cx;
+      let y = cy;
+      for (let s = 0; s < 5; s++) {
+        x += Math.cos(a) * (12 + Math.random() * 14);
+        y += Math.sin(a) * (10 + Math.random() * 10);
+        g.lineTo(x, y);
+      }
+      g.stroke();
+    }
+    for (let ring = 12; ring < 70; ring += 14) {
+      g.beginPath();
+      g.arc(cx, cy, ring + Math.random() * 6, 0, Math.PI * 2);
+      g.stroke();
+    }
+  }
+  return tex(c);
+}
+
+/** Floor stencil label for a barrier station (dark ink on the pale floor). */
 export function stencilTexture(text: string, sub: string) {
   const [c, g] = canvas(1024, 384);
   g.clearRect(0, 0, 1024, 384);
-  g.fillStyle = PALETTE.yellow;
+  g.fillStyle = '#2a2c31';
   g.font = `800 190px ${DISPLAY}`;
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.globalAlpha = 0.82;
+  g.globalAlpha = 0.85;
   g.fillText(text, 512, 170);
-  // stencil bridges: a few dark cuts across the glyphs
   g.globalCompositeOperation = 'destination-out';
   for (let x = 40; x < 1024; x += 118) g.fillRect(x, 60, 9, 230);
   g.globalCompositeOperation = 'source-over';
-  g.globalAlpha = 0.6;
-  g.fillStyle = '#d8d5cc';
+  g.globalAlpha = 0.8;
+  g.fillStyle = '#4a4c52';
   g.font = `500 44px ${MONO}`;
   g.fillText(sub, 512, 322);
   return tex(c);
 }
 
-/** Name billboard above a car. Returns texture + aspect. */
+/** Lane label decal: `BARE · NO PROTECTION` / `SEKISHO · AIRBAG`. */
+export function laneLabelTexture(text: string, tone: 'bare' | 'sekisho') {
+  const [c, g] = canvas(1024, 160);
+  g.clearRect(0, 0, 1024, 160);
+  g.fillStyle = tone === 'bare' ? '#2a2c31' : PALETTE.vermilion;
+  g.fillRect(0, 20, 22, 120);
+  g.font = `800 88px ${DISPLAY}`;
+  g.textBaseline = 'middle';
+  g.textAlign = 'left';
+  g.globalAlpha = 0.92;
+  g.fillText(text, 48, 84);
+  return tex(c);
+}
+
+/** Start-line bracket sign: `<car> — same agent, two runs`. */
+export function bracketTexture(name: string, color: string) {
+  const [c, g] = canvas(768, 256);
+  g.fillStyle = '#f2efe8';
+  g.beginPath();
+  g.roundRect(0, 0, 768, 256, 10);
+  g.fill();
+  g.fillStyle = color;
+  g.fillRect(0, 0, 26, 256);
+  g.strokeStyle = '#2a2c31';
+  g.lineWidth = 10;
+  g.beginPath();
+  g.moveTo(90, 40);
+  g.lineTo(60, 40);
+  g.lineTo(60, 216);
+  g.lineTo(90, 216);
+  g.stroke();
+  g.fillStyle = '#15161a';
+  g.font = `800 96px ${DISPLAY}`;
+  g.textAlign = 'left';
+  g.textBaseline = 'middle';
+  g.fillText(name, 112, 86);
+  g.fillStyle = '#5a5850';
+  g.font = `500 38px ${MONO}`;
+  g.fillText('same agent · two runs', 114, 178);
+  return tex(c);
+}
+
+/** Name billboard above a car. */
 export function billboardTexture(name: string, sub: string, color: string) {
   const [c, g] = canvas(512, 160);
   g.clearRect(0, 0, 512, 160);
-  g.fillStyle = 'rgba(13,14,17,0.82)';
+  g.fillStyle = 'rgba(21,22,26,0.88)';
   g.beginPath();
   g.roundRect(0, 0, 512, 128, 12);
   g.fill();
@@ -150,11 +280,10 @@ export function billboardTexture(name: string, sub: string, color: string) {
   g.textAlign = 'left';
   g.textBaseline = 'middle';
   g.fillText(name, 40, 54);
-  g.fillStyle = '#9a9890';
+  g.fillStyle = '#c9c7bf';
   g.font = `500 30px ${MONO}`;
   g.fillText(sub, 42, 104);
-  // pointer
-  g.fillStyle = 'rgba(13,14,17,0.82)';
+  g.fillStyle = 'rgba(21,22,26,0.88)';
   g.beginPath();
   g.moveTo(236, 128);
   g.lineTo(276, 128);
@@ -172,7 +301,6 @@ export function plaqueTexture(reason: string, chips: string[], tone: 'vermilion'
   const ink = tone === 'wood' ? '#1a120a' : '#f2efe8';
   g.fillStyle = bg;
   g.fillRect(0, 0, W, H);
-  // wood grain
   g.strokeStyle = tone === 'wood' ? 'rgba(80,45,10,0.18)' : 'rgba(0,0,0,0.18)';
   g.lineWidth = 3;
   for (let i = 0; i < 18; i++) {
@@ -185,8 +313,6 @@ export function plaqueTexture(reason: string, chips: string[], tone: 'vermilion'
   g.strokeStyle = tone === 'wood' ? PALETTE.vermilion : 'rgba(255,255,255,0.35)';
   g.lineWidth = 10;
   g.strokeRect(5, 5, W - 10, H - 10);
-
-  // reason, wrapped
   g.fillStyle = ink;
   g.font = `700 46px ${DISPLAY}`;
   g.textBaseline = 'top';
@@ -204,8 +330,6 @@ export function plaqueTexture(reason: string, chips: string[], tone: 'vermilion'
   const shown = lines.slice(0, 3);
   if (lines.length > 3) shown[2] = shown[2].replace(/\s?\S*$/, '…');
   shown.forEach((l, i) => g.fillText(l, 32, 30 + i * 52));
-
-  // chips
   let x = 32;
   const y = H - 84;
   g.font = `700 26px ${MONO}`;
@@ -230,7 +354,7 @@ export function drawRing(c: HTMLCanvasElement, progress: number, color = PALETTE
   g.clearRect(0, 0, S, S);
   g.lineCap = 'round';
   g.lineWidth = S * 0.09;
-  g.strokeStyle = 'rgba(255,255,255,0.12)';
+  g.strokeStyle = 'rgba(0,0,0,0.18)';
   g.beginPath();
   g.arc(S / 2, S / 2, S * 0.4, 0, Math.PI * 2);
   g.stroke();
@@ -254,8 +378,41 @@ export function glowTexture() {
   grad.addColorStop(1, 'rgba(255,255,255,0)');
   g.fillStyle = grad;
   g.fillRect(0, 0, 128, 128);
-  const t = new THREE.CanvasTexture(c);
-  return t;
+  return new THREE.CanvasTexture(c);
+}
+
+/** Soft puff for tyre smoke and coolant mist. */
+export function smokeTexture() {
+  const [c, g] = canvas(128, 128);
+  const grad = g.createRadialGradient(64, 64, 4, 64, 64, 62);
+  grad.addColorStop(0, 'rgba(255,255,255,0.55)');
+  grad.addColorStop(0.5, 'rgba(255,255,255,0.22)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+}
+
+/** Hall signage: NaAP wordmark banner on the back wall (never the real Euro NCAP mark). */
+export function signTexture(title: string, sub: string) {
+  const [c, g] = canvas(1024, 256);
+  g.fillStyle = '#15161a';
+  g.fillRect(0, 0, 1024, 256);
+  g.fillStyle = PALETTE.yellow;
+  g.fillRect(0, 0, 1024, 18);
+  g.fillRect(0, 238, 1024, 18);
+  g.fillStyle = '#f2efe8';
+  g.font = `800 150px ${DISPLAY}`;
+  g.textAlign = 'left';
+  g.textBaseline = 'middle';
+  g.fillText(title, 48, 118);
+  g.fillStyle = PALETTE.yellow;
+  g.font = `600 40px ${DISPLAY}`;
+  g.fillText(sub, 420, 100);
+  g.fillStyle = '#9a9890';
+  g.font = `500 26px ${MONO}`;
+  g.fillText('crash-test hall · 5 barriers · bare vs sekisho', 422, 150);
+  return tex(c);
 }
 
 export { DISPLAY, MONO };
