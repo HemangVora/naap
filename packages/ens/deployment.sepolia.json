@@ -1,0 +1,12 @@
+{
+  "relayer": "0xf78456BcfA81189fd7558DdeaA6c8C68075700f7",
+  "updatedAt": "2026-09-26T12:20:19.173Z",
+  "userRegistry": "0x10dF4e1D8135446c37E674E9070b99737dDaCFcA",
+  "resolver": "0x166F3c69e0d5afc601aB60211BEF470e82d13853",
+  "registerTx": "0x7a3616b2e8f40ffe58af4857ae138d4516ea72dd1932760e5bc31e7c0ac1f290",
+  "grantsTx": "0xd93af71a38d72a71de96241242980abcc6203212949a6de91ff3b8e081a3be3c",
+  "weather": {
+    "address": "0x16fB4859e0AC2b9e5E36DC5bB4EE654615a03D9C",
+    "tx": "0x8fbad13ab4eb1decc1a536aaeda56154fbdf7a554600069d81deb2196a5fa44e"
+  }
+}
