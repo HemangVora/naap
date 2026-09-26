@@ -5,5 +5,10 @@
   "type": "module",
   "main": "src/index.ts",
   "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "smoke": "node --env-file-if-exists=../../.env --import tsx src/smoke.ts",
+    "test": "vitest run --root ../.. packages/chain",
+    "test:fork": "node --env-file-if-exists=../../.env ../../node_modules/vitest/vitest.mjs run --root ../.. packages/chain"
+  },
   "dependencies": { "@crumple/core": "workspace:*", "viem": "^2.56.0" }
 }
