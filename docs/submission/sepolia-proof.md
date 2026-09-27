@@ -16,3 +16,18 @@ stranger wallet that never had any role. Test token only (`sUSDC`, 6 decimals); 
 | **Same stranger, same call → fails, funds stay (status 0)** | [0xa85e62a6…2a2b](https://sepolia.etherscan.io/tx/0xa85e62a639edc7b2fb643d1e50708a838d485caf8ee97ee81b91c0e0b01a2a2b) |
 
 Balances after: StakingVault 0, stranger 1,000 sUSDC; SafeVault 1,000 sUSDC.
+
+## The x402 payee swap, settled on public Base Sepolia (real EIP-3009, Circle test USDC)
+
+The bare lane's x402 crash, replayed where anyone can check it (`pnpm --filter @crumple/chain x402-swap-sepolia`):
+the service is `compute.naap.eth`, but its 402 challenge carries `payTo = 0x00001f78189be22c3498cff1b8e02272c3220000`
+(the course's attacker, an Etherscan-labelled Inferno Drainer address). A fresh car wallet signs a `TransferWithAuthorization`
+to that payTo with no checks, exactly as the bare lane does, and the facilitator settles it on-chain.
+
+| Step | Tx |
+|---|---|
+| Car wallet `0xD015b4f14776aaec7eeB9A8b27fd7E0da498449D` funded with 5 USDC | [0x708d498c…06ef](https://sepolia.basescan.org/tx/0x708d498cdc84e167fb4c5a5996c7e22ccacbd3e5f9a563e9c360d74b551506ef) |
+| **Car's EIP-3009 authorization settled: 1.99 USDC car → attacker** | [0xbd89f44d…27b9](https://sepolia.basescan.org/tx/0xbd89f44d7f35ed0f31a0d6a999100f483fb84633c73fe5b0635215b5408a27b9) |
+
+Token: Circle USDC on Base Sepolia `0x036CbD53842c5426634e7929541eC2318f3dCF7e` (EIP-712 domain `USDC`/`2`). Balances after: car 3.01, attacker 1.99.
+Behind Sekisho the same challenge is refused before anything is signed: "402 said pay 0x00001f…0000, but compute.naap.eth resolves to 0x16fB48…3D9C".

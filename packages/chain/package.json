@@ -7,6 +7,7 @@
   "exports": { ".": "./src/index.ts" },
   "scripts": {
     "smoke": "node --env-file-if-exists=../../.env --import tsx src/smoke.ts",
+    "x402-swap-sepolia": "node --env-file-if-exists=../../.env --import tsx src/scripts/x402-swap-sepolia.ts",
     "test": "vitest run --root ../.. packages/chain",
     "test:fork": "node --env-file-if-exists=../../.env ../../node_modules/vitest/vitest.mjs run --root ../.. packages/chain"
   },

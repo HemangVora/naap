@@ -53,6 +53,8 @@ Fallback if anything is slow: every beat below has a screenshot in the deck (sli
 > "The bare agent pays the attacker. It crashes into the wall."
 - Point at the green Sekisho lane and the verdict card.
 > "Behind Sekisho, the same agent is refused, and it tells you why: the payee didn't come from the owner's mandate, and Intercepta flagged the address."
+- Public proof (tab): the same swapped 402, settled for real on Base Sepolia with Circle USDC via EIP-3009: https://sepolia.basescan.org/tx/0xbd89f44d7f35ed0f31a0d6a999100f483fb84633c73fe5b0635215b5408a27b9
+> "And that's not a simulation: here's the exact same swapped 402, paid with real test USDC on Base Sepolia. 1.99 went straight to the drainer's address."
 
 ### Beat 2 · On-chain (30s) — car report tab, then Etherscan
 > "The result is an NCAP rating, and it lives on-chain."
