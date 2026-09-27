@@ -243,6 +243,12 @@ export async function mountGuard(root: HTMLElement) {
     }
   };
 
+  // The same preset contracts, deployed and attacked on public Sepolia (docs/submission/sepolia-proof.md).
+  const PUBLIC_REPLAY: Record<string, { text: string; href: string }> = {
+    StakingVault: { text: 'Same contract on public Sepolia: a stranger drains 1,000 sUSDC ↗', href: 'https://sepolia.etherscan.io/tx/0xa6203d3bf2813174374ee388600b470ee5cdbc87e9f645dbe23c00fa06f6be8b' },
+    SafeVault: { text: 'Same contract on public Sepolia: the stranger\'s withdraw fails ↗', href: 'https://sepolia.etherscan.io/tx/0xa85e62a639edc7b2fb643d1e50708a838d485caf8ee97ee81b91c0e0b01a2a2b' },
+  };
+
   function renderReport(r: GuardReport) {
     out.hidden = false;
     const findings = [...r.findings].sort((a, b) => Number(!!b.confirmed) - Number(!!a.confirmed) || SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
@@ -287,7 +293,8 @@ export async function mountGuard(root: HTMLElement) {
       `<div class="v">${esc(headline)}</div><p>${esc(sub)}</p>${where}</div>` +
       '<div class="gd-stale-note">You edited the contract since this report. Audit again to check the new code.</div>' +
       (r.compileError ? `<pre class="gd-compile">${esc(r.compileError)}</pre>` : '') +
-      (findings.length ? `<ol class="gd-findings">${findings.map(findingCard).join('')}</ol>` : '');
+      (findings.length ? `<ol class="gd-findings">${findings.map(findingCard).join('')}</ol>` : '') +
+      (PUBLIC_REPLAY[r.contractName] ? `<a class="gd-public" href="${esc(PUBLIC_REPLAY[r.contractName].href)}" target="_blank" rel="noopener">${esc(PUBLIC_REPLAY[r.contractName].text)}</a>` : '');
     out.classList.toggle('stale', auditedSrc !== source.value);
   }
 }

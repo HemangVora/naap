@@ -87,3 +87,6 @@
 @media (prefers-reduced-motion: reduce) {
   .gd-write.busy, .gd-pending li { animation: none; }
 }
+
+.gd-public { display: block; margin-top: 14px; padding: 12px 14px; border: 1px solid var(--yellow); border-radius: 10px; font-family: var(--mono); font-size: 13px; color: var(--yellow); text-decoration: none; }
+.gd-public:hover { background: rgba(245, 196, 0, 0.08); }

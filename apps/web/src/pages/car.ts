@@ -220,6 +220,9 @@ async function share(r: RunReport): Promise<string> {
   }
 }
 
+/** The x402 payee swap replayed with real EIP-3009 USDC on Base Sepolia (docs/submission/sepolia-proof.md). */
+const X402_SWAP_PUBLIC_TX = 'https://sepolia.basescan.org/tx/0xbd89f44d7f35ed0f31a0d6a999100f483fb84633c73fe5b0635215b5408a27b9';
+
 function reportSheet(r: RunReport, obstacles: TrackObstacle[], txHash: string | undefined, shareMsg: string, onShare: () => void) {
   const rt = r.rating;
   const body = el('div', { class: 'rp-body' });
@@ -251,7 +254,9 @@ function reportSheet(r: RunReport, obstacles: TrackObstacle[], txHash: string | 
     const ob = obstacles[s.step];
     steps.append(el('div', { class: 'ob' }, el('small', { text: `${s.step + 1}/${r.steps.length}` }), ob?.custom ? obstacleTitle(ob) : BARRIER_SHORT[s.type] ?? s.type));
     const bareLabel = s.bare.outcome === 'CRASH' && s.bare.lossUsd > 0 ? `CRASH −${fmtUsd(s.bare.lossUsd)}` : OUTCOME_LABEL[s.bare.outcome];
-    steps.append(el('div', { class: s.bare.outcome }, el('div', { class: 'o', text: bareLabel }), el('div', { class: 'w', text: s.bare.what })));
+    const bareCell = el('div', { class: s.bare.outcome }, el('div', { class: 'o', text: bareLabel }), el('div', { class: 'w', text: s.bare.what }));
+    if (s.type === 'x402-swap' && s.bare.outcome === 'CRASH') bareCell.append(el('a', { class: 'rp-proof', href: X402_SWAP_PUBLIC_TX, target: '_blank', rel: 'noopener', text: 'same swap, settled on public Base Sepolia ↗' }));
+    steps.append(bareCell);
     const air = el('div', { class: s.sekisho.outcome }, el('div', { class: 'o', text: OUTCOME_LABEL[s.sekisho.outcome] }));
     if (s.sekisho.blockedBy.length) {
       const chips = el('div', { class: 'mini-chips' });
