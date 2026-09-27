@@ -22,6 +22,8 @@ export function mountCar(root: HTMLElement, carId: string) {
   let qrCanvas: HTMLCanvasElement | null = null;
   /** The assessment sheet (GET /api/cars/:id/report), polled once the rating is in. */
   let report: RunReport | null = null;
+  /** This run's x402-swap crash, settled for real on Base Sepolia by the server (GET /api/cars/:id/public-proof). */
+  let proof: PublicProof | null = null;
   let carInfo: CarPublic | null = null;
   let shareMsg = '';
 
@@ -34,7 +36,7 @@ export function mountCar(root: HTMLElement, carId: string) {
 
     if (report) {
       const tx = c?.onchain?.txHash ?? carInfo?.ratingOnchain?.txHash;
-      page.append(reportSheet(report, store.trackOf(c?.car.trackId).obstacles, tx, shareMsg, async () => {
+      page.append(reportSheet(report, store.trackOf(c?.car.trackId).obstacles, tx, shareMsg, proof, async () => {
         shareMsg = await share(report!);
         schedule();
         window.setTimeout(() => ((shareMsg = ''), schedule()), 2500);
@@ -141,6 +143,21 @@ export function mountCar(root: HTMLElement, carId: string) {
     }
   };
   void loadReport();
+  let proofPolls = 0;
+  window.setInterval(async () => {
+    if (mock || !report || proofPolls > 90 || proof?.status === 'done' || proof?.status === 'error') return;
+    if (!report.steps.some((st) => st.type === 'x402-swap' && st.bare.outcome === 'CRASH')) return;
+    proofPolls++;
+    try {
+      const r = await fetch(`/api/cars/${encodeURIComponent(carId)}/public-proof`);
+      if (r.ok) {
+        const next = ((await r.json()) as { proof: PublicProof | null }).proof;
+        if (next && next.status !== proof?.status) (proof = next), schedule();
+      }
+    } catch {
+      /* try again next tick */
+    }
+  }, 2000);
   let polls = 0;
   window.setInterval(() => {
     if (report || mock || polls > 60) return;
@@ -221,9 +238,11 @@ async function share(r: RunReport): Promise<string> {
 }
 
 /** The x402 payee swap replayed with real EIP-3009 USDC on Base Sepolia (docs/submission/sepolia-proof.md). */
+const BASESCAN_TX = 'https://sepolia.basescan.org/tx/';
+type PublicProof = { status: 'pending' } | { status: 'done'; txHash: string } | { status: 'error' };
 const X402_SWAP_PUBLIC_TX = 'https://sepolia.basescan.org/tx/0xbd89f44d7f35ed0f31a0d6a999100f483fb84633c73fe5b0635215b5408a27b9';
 
-function reportSheet(r: RunReport, obstacles: TrackObstacle[], txHash: string | undefined, shareMsg: string, onShare: () => void) {
+function reportSheet(r: RunReport, obstacles: TrackObstacle[], txHash: string | undefined, shareMsg: string, proof: PublicProof | null, onShare: () => void) {
   const rt = r.rating;
   const body = el('div', { class: 'rp-body' });
   body.append(
@@ -255,7 +274,11 @@ function reportSheet(r: RunReport, obstacles: TrackObstacle[], txHash: string | 
     steps.append(el('div', { class: 'ob' }, el('small', { text: `${s.step + 1}/${r.steps.length}` }), ob?.custom ? obstacleTitle(ob) : BARRIER_SHORT[s.type] ?? s.type));
     const bareLabel = s.bare.outcome === 'CRASH' && s.bare.lossUsd > 0 ? `CRASH −${fmtUsd(s.bare.lossUsd)}` : OUTCOME_LABEL[s.bare.outcome];
     const bareCell = el('div', { class: s.bare.outcome }, el('div', { class: 'o', text: bareLabel }), el('div', { class: 'w', text: s.bare.what }));
-    if (s.type === 'x402-swap' && s.bare.outcome === 'CRASH') bareCell.append(el('a', { class: 'rp-proof', href: X402_SWAP_PUBLIC_TX, target: '_blank', rel: 'noopener', text: 'same swap, settled on public Base Sepolia ↗' }));
+    if (s.type === 'x402-swap' && s.bare.outcome === 'CRASH') {
+      if (proof?.status === 'done') bareCell.append(el('a', { class: 'rp-proof live', href: `${BASESCAN_TX}${proof.txHash}`, target: '_blank', rel: 'noopener', text: `● LIVE: this payment, settled on Base Sepolia ↗ ${proof.txHash.slice(0, 10)}…` }));
+      else if (proof?.status === 'pending') bareCell.append(el('div', { class: 'rp-proof', text: 'settling this payment on public Base Sepolia…' }));
+      else bareCell.append(el('a', { class: 'rp-proof', href: X402_SWAP_PUBLIC_TX, target: '_blank', rel: 'noopener', text: 'same swap, settled on public Base Sepolia ↗' }));
+    }
     steps.append(bareCell);
     const air = el('div', { class: s.sekisho.outcome }, el('div', { class: 'o', text: OUTCOME_LABEL[s.sekisho.outcome] }));
     if (s.sekisho.blockedBy.length) {

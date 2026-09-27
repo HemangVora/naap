@@ -15,6 +15,8 @@ import { carId, randomSuffix, trackSlug, validateSpec, validateTrack, type SpecI
 import { computeStats } from './stats.js';
 import { McpRegistry, mountMcp, type Admitted, type AdmitMeta } from './mcp.js';
 import { buildReport, reportLlmFromEnv, type ReportLlm } from './report.js';
+import { createPublicProofs } from './publicProof.js';
+import { ATTACKERS } from '@crumple/intercepta';
 import { draftIncident, incidentHash, incidentId, validateIncident } from './incidents.js';
 import { createGuardEngine, GUARD_PRESETS, type GuardReport } from '@crumple/guard';
 import { draftContract, GUARD_LIMITS } from './guard.js';
@@ -148,6 +150,11 @@ export async function buildApp(w: Wiring, store?: CarStore, opts: AppOptions = {
     }
   }
 
+  const publicProofs = createPublicProofs({
+    funderPk: process.env.VITEST ? undefined : (process.env.FACILITATOR_PK as `0x${string}` | undefined),
+    payTo: ATTACKERS[0], rpcUrl: process.env.BASE_SEPOLIA_RPC_URL, log: (l) => app.log.warn(l),
+  });
+
   async function startRun(car: Car, spec: CarSpec) {
     const track = db.getTrack(spec.trackId ?? DEFAULT_TRACK_ID) ?? DEFAULT_TRACK;
     queue.add(car.id, async () => {
@@ -157,6 +164,8 @@ export async function buildApp(w: Wiring, store?: CarStore, opts: AppOptions = {
         rating = await w.runCar(car, spec, deps, track);
         db.setRating(car.id, rating);
         report = produceReport(car, track, rating); // not awaited: the queue slot frees now
+        const swap = db.results(car.id).find((r) => r.variant === 'bare' && r.barrierId === 'x402-swap' && r.outcome === 'CRASH' && r.lossUsd > 0);
+        if (swap) publicProofs.start(car.id, swap.lossUsd); // settles the same swapped payment on Base Sepolia
       } finally {
         secrets.delete(car.id);
         // MCP agents get "finished" once the report exists (≤ ~8 s later), so it can carry the verdict.
@@ -231,6 +240,7 @@ export async function buildApp(w: Wiring, store?: CarStore, opts: AppOptions = {
   });
 
   app.get('/api/cars', async () => ({ cars: db.publicCars() }));
+  app.get<{ Params: { id: string } }>('/api/cars/:id/public-proof', async (req) => ({ proof: publicProofs.get(req.params.id) }));
 
   // ─── tracks ────────────────────────────────────────────────────────────────
   app.get('/api/tracks', async () => ({ tracks: db.tracks().map(publicTrack) }));
