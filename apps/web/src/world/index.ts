@@ -135,6 +135,8 @@ export async function mountWorld(root: HTMLElement) {
   nav.resize(window.innerWidth, window.innerHeight);
   nav.setGroundProvider((x, z) => biomes.groundAt(x, z));
   const hsCam = new HighSpeedCam();
+  // The crash-replay inset covers the lanes on a presenter screen; opt back in with ?hscam.
+  const showHsCam = new URLSearchParams(location.search).has('hscam');
   const smoke = new SmokePool(scene, 64);
 
   const inset = el('div', { class: 'hs-cam' });
@@ -1062,6 +1064,7 @@ export async function mountWorld(root: HTMLElement) {
     renderer.render(scene, nav!.camera);
 
     // high-speed-cam inset: slow-motion replay of the latest crash / AEB stop anywhere in the world
+    if (!showHsCam) replays.length = 0;
     if (!currentReplay && replays.length) {
       // crashes first (they are the story), then the most recent AEB stops
       const ci = replays.findIndex((r) => r.sim.kind === 'crash');
